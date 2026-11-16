@@ -422,7 +422,9 @@ const shipCost = () => upc(5000 * Math.pow(1.7, S.shipLv) * curN());
 const hireCost = () => upc(2500 * Math.pow(1.65, S.workers));
 const trainCost = () => upc(4000 * Math.pow(1.8, S.trainLv));
 const chOn = () => CH.reduce((a, c) => a + (S.ch[c.id].lv > 0 ? 1 : 0), 0);
-const curN = () => N_M * Math.pow(STAGE_BOOST, S.st) * Math.pow(AUTO_M, S.autoLv) * Math.pow(CH_N, Math.max(0, chOn() - 1)) * Math.pow(TIER_N, railTier());   // 주문 1묶음 = 고객 n명
+// 📈 규모의 경제: 많이 보낼수록 1묶음이 저절로 커짐 (누적 고객 1만 명 기준, 10배마다 ×1.26)
+const SCALE_E = 0.1;
+const curN = () => N_M * Math.pow(Math.max(1, (S.served || 0) / 1e4), SCALE_E) * Math.pow(STAGE_BOOST, S.st) * Math.pow(AUTO_M, S.autoLv) * Math.pow(CH_N, Math.max(0, chOn() - 1)) * Math.pow(TIER_N, railTier());   // 주문 1묶음 = 고객 n명
 const unitCost = () => UNIT_COST * curN();
 const autoCost = () => upc(AUTO_BASE * Math.pow(AUTO_G, S.autoLv));
 const autoName = lv => AUTO_NAMES[Math.min(AUTO_NAMES.length - 1, Math.floor(lv / 4))];
