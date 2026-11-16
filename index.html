@@ -358,7 +358,7 @@ const needRad = () => TAU / perRev();
 const gear = () => RAILS[railTier()].mult * lines();
 const SLICES = 8;   // 레일 1/8바퀴마다 조금씩 포장 (한 바퀴 다 돌 때 한꺼번에 사라지지 않게)
 // 자동 회전 모터 (아시아 단계~): 손을 뗐을 때 최대 속도의 20/25/30%로 혼자 돎
-const AUTO_ROT = [0, 0.08, 0.12, 0.16, 0.2, 0.25];   // 손 뗐을 때 최대 속도의 5~20% (손으로 돌리는 게 훨씬 빠르게)
+const AUTO_ROT = [0, 0.04, 0.06, 0.08, 0.1, 0.12];   // 손 뗐을 때 최대 속도의 4~12% (새 레일·라인 기어비가 곱해져서 낮게 잡음 — 손으로 돌리는 게 훨씬 빠르게)
 const AR_ST = 1;                                          // 🏙️ 서울 단계부터 살 수 있음 (Lv.4~5는 아시아부터)
 const arMax = () => S.st >= 3 ? 5 : 3;
 const autoRotPct = () => AUTO_ROT[Math.min(5, S.autoRotLv || 0)];
