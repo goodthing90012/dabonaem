@@ -1456,7 +1456,7 @@ const MAXDOTS = 2500, DOT_LIFT = 0.075;   // 큼직한 택배 상자 최대 2,50
 let dotSlots = [], dpp = 1, dotTopY = 0, dotUsed = 0;
 const crowds = new Map();          // order.id → {k, xs, ys, ls}
 // 주문 컨테이너: 물량이 늘수록 점점 작아지며 화면을 채우다가, TOTE_MAX묶음을 넘으면 작은 점 상자로 넘어감
-const TOTE_MAX = 1200, OUT_MAX = 600;   // 이 개수까지는 상자로 그리고, 넘으면 점으로 (그 즈음엔 크기가 점과 거의 같음)
+const TOTE_MAX = 600, OUT_MAX = 600;   // 이 개수까지는 상자로 그리고, 넘으면 점으로 (그 즈음엔 크기가 점과 거의 같음)
 let bigInOn = true, kIn = 1;
 function frontN(){
   const n = S.orders.length;
@@ -1725,7 +1725,7 @@ function updateAnts(dt){
   const sp = R * 1.6;
   const F = frontN();
   // 큰 크기 그대로 화면(바닥 자리)이 거의 찰 때까지 늘어나다가, 그 뒤로 점점 작아짐
-  const fill = Math.max(24, (slotsFor(1).ground || 100) * 0.6);
+  const fill = Math.max(24, (slotsFor(1).ground || 100) * 0.25);   // 바닥이 1/4쯤 차면 벌써 작아지기 시작
   const tgtK = fitK(Math.min(S.orders.length, TOTE_MAX), fill);
   kIn += (tgtK - kIn) * Math.min(1, dt * 1.2);            // 천천히 따라가서 덜컥거리지 않게
   const SL = slotsFor(kIn);
