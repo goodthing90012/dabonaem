@@ -202,7 +202,8 @@ const STAGES = [
   {name:'아시아',    icon:'🌏', goal:4.7e9},
   {name:'전 인류',   icon:'🌍', goal:WORLD},
 ];
-const AUTO_BASE = 3000, AUTO_G = 3.1, AUTO_M = 1.35, STAGE_BOOST = 3; // 봇 시뮬레이션 튜닝(연동사·택배 단가·평점·단골·광고·연동료·설비 유지비 포함): 보통 플레이 ~73분
+const AUTO_BASE = 3000, AUTO_G = 6, AUTO_M = 1.25, STAGE_BOOST = 3; // 봇 시뮬레이션 튜닝: 잘하면 ~55분, 보통 ~60분, 자동화를 덜 사도 ~113분
+const CH_N = 1.18, TIER_N = 1.3, PRICE_M = 1.25;   // 채널 연동·새 레일도 물량 단위를 키움 · 단가 +25%
 const AUTO_NAMES = ['포장 작업대', '핸드 스캐너', '컨베이어', '자동 포장기', '소터', 'AGV 로봇', '로봇 피킹', '다크 팩토리', '글로벌 풀필먼트'];
 const SCALE = 3;                 // 물량 배율: 주문 ×3, 건당 금액 ÷3, 원 한 바퀴 = 3건
 const UNIT_COST = 100, SAVE_KEY = 'dabonaettung-v1', TAU = Math.PI * 2;
@@ -368,7 +369,7 @@ function evMult(id){
   for(const b of S.boosts) if(!b.ch || b.ch === id) m *= BOOSTS[b.k].mult;
   return m;
 }
-const perMinute = () => CH.reduce((s, c) => s + chRate(c, false) * c.price * 60, 0) * curN();
+const perMinute = () => CH.reduce((s, c) => s + chRate(c, false) * c.price * PRICE_M * 60, 0) * curN();
 const boostCost = k => r100(Math.max(BOOSTS[k].base * curN(), perMinute() * BOOSTS[k].k));
 function topChannel(){ return CH.filter(c => S.ch[c.id].lv > 0).sort((a, b) => S.ch[b.id].lv - S.ch[a.id].lv || b.rate - a.rate)[0]; }
 function boostLocked(k){ const t = BOOSTS[k].target; return t && t !== 'top' && !S.ch[t].lv; }
@@ -401,11 +402,12 @@ const pickCost = () => r100(3000 * Math.pow(1.8, S.pickLv));
 const shipCost = () => r100(5000 * Math.pow(1.7, S.shipLv) * curN());
 const hireCost = () => r100(2500 * Math.pow(1.65, S.workers));
 const trainCost = () => r100(4000 * Math.pow(1.8, S.trainLv));
-const curN = () => Math.pow(STAGE_BOOST, S.st) * Math.pow(AUTO_M, S.autoLv);   // 주문 1묶음 = 고객 n명
+const chOn = () => CH.reduce((a, c) => a + (S.ch[c.id].lv > 0 ? 1 : 0), 0);
+const curN = () => Math.pow(STAGE_BOOST, S.st) * Math.pow(AUTO_M, S.autoLv) * Math.pow(CH_N, Math.max(0, chOn() - 1)) * Math.pow(TIER_N, railTier());   // 주문 1묶음 = 고객 n명
 const unitCost = () => UNIT_COST * curN();
 const autoCost = () => r100(AUTO_BASE * Math.pow(AUTO_G, S.autoLv));
 const autoName = lv => AUTO_NAMES[Math.min(AUTO_NAMES.length - 1, Math.floor(lv / 4))];
-const orderPay = o => Math.round(o.price * (o.n || 1) * shipMult());
+const orderPay = o => Math.round(o.price * PRICE_M * (o.n || 1) * shipMult());
 
 const fmtQ = x => x < 100 ? (Math.round(x * 10) / 10).toString() : fmtN(x);   // 한 바퀴 처리량용 (작으면 소수 1자리)
 function fmtN(n){                // 개수 (만·억·조)
@@ -2536,8 +2538,8 @@ CH.forEach(c => ROWS.channel.push({
     if(c.via && !S.ch[c.via].lv) return '플레이오토 연동 후 열려요';
     const tr = c.trait ? c.trait + ' · ' : '';
     const fee = c.id === 'excel' ? '' : ` · 연동료 일 ${fmt(chFeeOne(c, s.lv + 1))}`;
-    if(!s.lv) return `${tr}${c.via ? '플레이오토 연동 · ' : ''}분당 약 ${(c.rate * 60).toFixed(0)}건 · 건당 ${fmt(c.price)}${fee}`;
-    return `${tr}분당 ${(chRate(c, false) * 60).toFixed(1)}건 · 건당 ${fmt(c.price)} · 평판 ${Math.round(s.rep * 100)}%${c.id === 'excel' ? '' : ` · 연동료 일 ${fmt(chFeeOne(c, s.lv))}→${fmt(chFeeOne(c, s.lv + 1))}`}`;
+    if(!s.lv) return `${tr}${c.via ? '플레이오토 연동 · ' : ''}분당 약 ${(c.rate * 60).toFixed(0)}건 · 건당 ${fmt(Math.round(c.price * PRICE_M))} · 물량 단위 ×${CH_N}${fee}`;
+    return `${tr}분당 ${(chRate(c, false) * 60).toFixed(1)}건 · 건당 ${fmt(Math.round(c.price * PRICE_M))} · 평판 ${Math.round(s.rep * 100)}%${c.id === 'excel' ? '' : ` · 연동료 일 ${fmt(chFeeOne(c, s.lv))}→${fmt(chFeeOne(c, s.lv + 1))}`}`;
   },
   btn:() => (S.ch[c.id].lv ? '마케팅 ' : '연동 ') + fmt(chCost(c)),
   ok:() => !(c.st > S.st) && !(c.via && !S.ch[c.via].lv) && S.money >= chCost(c),
@@ -2592,7 +2594,7 @@ ROWS.pack.push(
    desc:() => { const cur = RAILS[railTier()], nx = RAILS[railTier() + 1];
      if(!nx) return `한 바퀴 처리량 ×${cur.mult} · 더 좋은 레일은 없어요`;
      if(nx.st > S.st) return `🔒 ${STAGES[nx.st].icon} ${STAGES[nx.st].name} 단계에서 살 수 있어요 · 지금 ${cur.name} ×${cur.mult}`;
-     return `${cur.name} ×${cur.mult} → ${nx.name} ×${nx.mult} (한 바퀴 처리량) · 관성 +${(0.25 * Math.log(Math.max(1.01, maxRev() / 0.04))).toFixed(1)}초 · 유지비 일 +${fmt(Math.round((nx.cost - cur.cost) * UPKEEP * curN()))}`; },
+     return `${cur.name} ×${cur.mult} → ${nx.name} ×${nx.mult} (한 바퀴 처리량) · 물량 단위 ×${TIER_N} · 관성 +${(0.25 * Math.log(Math.max(1.01, maxRev() / 0.04))).toFixed(1)}초 · 유지비 일 +${fmt(Math.round((nx.cost - cur.cost) * UPKEEP * curN()))}`; },
    btn:() => { const nx = RAILS[railTier() + 1]; return !nx ? 'MAX' : nx.st > S.st ? '🔒' : fmt(railTierCost()); },
    ok:() => { const nx = RAILS[railTier() + 1]; return !!nx && nx.st <= S.st && S.money >= railTierCost(); },
    once:true, act:() => { S.money -= railTierCost(); S.railTier = railTier() + 1; say(`🚝 ${RAILS[railTier()].name} 설치 완료! 처리량 ×${RAILS[railTier()].mult}`, '#0f172a', 2.2); fx.confetti = 1.2; SFX.ding(6); }},
