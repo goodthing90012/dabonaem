@@ -49,7 +49,8 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
 @keyframes pulse{to{background:#fecaca}}
 .hidden{display:none!important}
 #stage{position:relative;flex:1;min-height:0}
-#cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
+#cv,#bgcv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
+#bgcv{pointer-events:none}
 #sheet{position:fixed;left:0;right:0;bottom:0;max-height:56dvh;display:flex;flex-direction:column;background:#fff;
   border-radius:20px 20px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.15);z-index:5;padding-bottom:env(safe-area-inset-bottom);
   transform:translateY(calc(100% + 40px));transition:transform .22s ease}
@@ -134,7 +135,7 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
     <button id="menuBtn" aria-label="메뉴">⚙︎</button>
   </header>
   <div id="goal"><div id="goalText"></div><div class="gbar"><i id="goalFill"></i></div></div>
-  <div id="stage"><canvas id="cv"></canvas><div id="banner" class="hidden"></div></div>
+  <div id="stage"><canvas id="bgcv"></canvas><canvas id="cv"></canvas><div id="banner" class="hidden"></div></div>
 </div>
 <div id="sheet">
   <div class="grab"></div>
@@ -841,7 +842,8 @@ function update(dt){
 }
 
 // ═════ 레이아웃 ═════
-const cv = $('cv'), ctx = cv.getContext('2d');
+const cv = $('cv');
+let ctx = cv.getContext('2d');
 let dpr = 1, landscape = false, bg = null;
 function layout(){
   const p = 8;
@@ -883,7 +885,7 @@ const ZONES = [
   {k:'out',      sheet:'out',     fill:'#ece7fd', label:'🚚 출고'},
 ];
 function buildBg(){
-  bg = document.createElement('canvas');
+  bg = $('bgcv');   // 바닥은 뒤쪽 캔버스에 한 번만 그려둠 (매 프레임 다시 안 그림)
   bg.width = cv.width; bg.height = cv.height;
   const b = bg.getContext('2d'); b.setTransform(dpr, 0, 0, dpr, 0, 0);
   // 바닥: 은은한 체크 타일
@@ -918,6 +920,23 @@ function pathRR(c, x, y, w, h, r){
   c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
 }
 const rr = (x, y, w, h, r) => pathRR(ctx, x, y, w, h, r);
+// 자주 그리는 그림은 한 번만 그려두고 찍어서 씀 (draw(x0,y0) = 원래 함수로 기준점에 그리기)
+const spriteCache = new Map();
+function sprite(key, w, h, ox, oy, draw){
+  let sp = spriteCache.get(key);
+  if(!sp){
+    if(spriteCache.size > 300) spriteCache.clear();
+    const c2 = document.createElement('canvas');
+    c2.width = Math.max(1, Math.ceil(w * dpr)); c2.height = Math.max(1, Math.ceil(h * dpr));
+    const g = c2.getContext('2d'); g.scale(dpr, dpr);
+    const saved = ctx; ctx = g;
+    try{ draw(ox, oy); } finally { ctx = saved; }
+    sp = {cv:c2, w, h, ox, oy};
+    spriteCache.set(key, sp);
+  }
+  return sp;
+}
+const stamp = (sp, x, y) => ctx.drawImage(sp.cv, x - sp.ox, y - sp.oy, sp.w, sp.h);
 function shade(hex, a){
   const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
   if(a > 0){ r += (255 - r) * a; g += (255 - g) * a; b += (255 - b) * a; } else { r *= 1 + a; g *= 1 + a; b *= 1 + a; }
@@ -947,7 +966,12 @@ function tote(xc, yb, s, color, urgent){
 // 2등신 작업자
 function chibi(x, yb, s, vest, hat, bob = 0, face = 1){
   shadow(x, yb, s * 0.36);
-  const y = yb - bob, ol = '#4a3b33', vd = shade(vest, -0.4), lw = Math.max(1.1, s * 0.055);
+  const sq = Math.round(s * 2) / 2;
+  const sp = sprite('chibi' + vest + hat + sq + face, sq * 1.1, sq * 1.45, sq * 0.55, sq * 1.4, (x0, y0) => chibiBody(x0, y0, sq, vest, hat, face));
+  stamp(sp, x, yb - bob);
+}
+function chibiBody(x, yb, s, vest, hat, face){
+  const y = yb, ol = '#4a3b33', vd = shade(vest, -0.4), lw = Math.max(1.1, s * 0.055);
   ctx.lineWidth = lw; ctx.lineJoin = 'round';
   // 다리
   ctx.fillStyle = '#475569'; ctx.strokeStyle = '#1e293b';
@@ -1290,7 +1314,7 @@ function buildDotSlots(){
   // 점 전용 픽셀 버퍼 (CSS 픽셀 해상도) — 만 단위 점을 빠르게 찍기 위함
   dotW = Math.max(1, Math.ceil(W)); dotH = Math.max(1, Math.ceil(H));
   dotCv = document.createElement('canvas'); dotCv.width = dotW; dotCv.height = dotH;
-  dotCx = dotCv.getContext('2d'); dotImg = dotCx.createImageData(dotW, dotH); dotU32 = new Uint32Array(dotImg.data.buffer);
+  dotCx = dotCv.getContext('2d'); dotImg = dotCx.createImageData(dotW, dotH); dotU32 = new Uint32Array(dotImg.data.buffer); dPrev = null;
 }
 let dotCv = null, dotCx = null, dotImg = null, dotU32 = null, dotW = 0, dotH = 0;
 const leaving = [];   // 포장돼서 중앙 포장대로 걸어가는 점 무리
@@ -1414,8 +1438,10 @@ function updateOutflow(dt){
   }
 }
 // 5×4 택배 상자 한 개 찍기 (x,y = 아래 가운데)
+let dbx0 = 1e9, dby0 = 1e9, dbx1 = -1, dby1 = -1, dPrev = null;   // 이번 프레임에 점을 찍은 영역
 function box5(u, w, h, x, y, pc){
   if(x < 2 || x >= w - 3 || y < 4 || y >= h) return;
+  if(x < dbx0) dbx0 = x; if(x > dbx1) dbx1 = x; if(y < dby0) dby0 = y; if(y > dby1) dby1 = y;
   const a = pc[0], t = pc[1], d = pc[2];
   let q = y * w + x;            // 아랫줄
   u[q - 2] = d; u[q - 1] = d; u[q] = d; u[q + 1] = d; u[q + 2] = d;
@@ -1441,7 +1467,10 @@ function bigOut(){
 function drawDots(){
   if((!dotUsed && !leaving.length && !outflow.length) || !dotU32) return;
   const u = dotU32, w = dotW, h = dotH, lift = R * DOT_LIFT;
-  u.fill(0);
+  // 지난 프레임에 찍은 영역만 지움 (화면 전체를 매번 지우지 않음)
+  if(dPrev){ for(let yy = dPrev.y0; yy <= dPrev.y1; yy++) u.fill(0, yy * w + dPrev.x0, yy * w + dPrev.x1 + 1); }
+  else u.fill(0);
+  dbx0 = 1e9; dby0 = 1e9; dbx1 = -1; dby1 = -1;
   // 작은 택배 상자 점: 아래 2줄은 채널 색, 맨 윗줄은 밝은 색 (알록달록, 징그럽지 않게)
   const RED = PAL.urgent, GRAY = PAL.late;
   for(let i = 0; i < S.orders.length; i++){
@@ -1462,11 +1491,17 @@ function drawDots(){
       box5(u, w, h, q.x | 0, q.y | 0, PAL.box);
     }
   }
-  dotCx.putImageData(dotImg, 0, 0);
-  ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(dotCv, 0, 0, dotW, dotH); ctx.restore();
+  const cur = dbx1 >= 0 ? {x0:Math.max(0, dbx0 - 3), y0:Math.max(0, dby0 - 4), x1:Math.min(w - 1, dbx1 + 3), y1:Math.min(h - 1, dby1)} : null;
+  let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
+  for(const r of [dPrev, cur]) if(r){ x0 = Math.min(x0, r.x0); y0 = Math.min(y0, r.y0); x1 = Math.max(x1, r.x1); y1 = Math.max(y1, r.y1); }
+  dPrev = cur;
+  if(x1 < 0) return;
+  const dw = x1 - x0 + 1, dh = y1 - y0 + 1;
+  dotCx.putImageData(dotImg, 0, 0, x0, y0, dw, dh);
+  if(cur){ ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(dotCv, cur.x0, cur.y0, cur.x1 - cur.x0 + 1, cur.y1 - cur.y0 + 1, cur.x0, cur.y0, cur.x1 - cur.x0 + 1, cur.y1 - cur.y0 + 1); ctx.restore(); }
 }
 function buildSlots(){
-  slots = []; if(typeof slotCache !== 'undefined'){ slotCache.clear(); toteCache.clear(); }
+  slots = []; if(typeof slotCache !== 'undefined'){ slotCache.clear(); toteCache.clear(); spriteCache.clear(); }
   const z = L.pack, RR = R * 1.85, pk = L.pick;
   const pc = {x:pk.x + pk.w / 2, y:pk.y + pk.h / 2};
   // 가로: 피킹존 쪽부터 / 세로: 레일 아래 앞쪽부터 (위로 쌓일 공간 확보)
@@ -1609,15 +1644,16 @@ function paintTote(c, x, y, s, col, mood, lg, hop){
 }
 // 멈춰 있는 상자는 미리 그려둔 그림을 찍어서 빠르게 (수백 개여도 가볍게)
 const toteCache = new Map();
-function toteSprite(col, s, mood){
-  const sq = Math.round(s * 2) / 2, key = col + sq + (mood ? 'm' : '');
+function toteSprite(col, s, mood, shad){
+  const sq = Math.round(s * 2) / 2, key = col + sq + (mood ? 'm' : '') + (shad ? 's' : '');
   let sp = toteCache.get(key);
   if(!sp){
     if(toteCache.size > 400) toteCache.clear();
-    const W2 = Math.ceil(sq * 1.3), H2 = Math.ceil(sq * 1.15), cv2 = document.createElement('canvas');
+    const W2 = Math.ceil(sq * 1.3), H2 = Math.ceil(sq * 1.3), cv2 = document.createElement('canvas');
     cv2.width = Math.ceil(W2 * dpr); cv2.height = Math.ceil(H2 * dpr);
     const c = cv2.getContext('2d'); c.scale(dpr, dpr);
-    const fx0 = W2 / 2, fy0 = H2 - sq * 0.12;
+    const fx0 = W2 / 2, fy0 = H2 - sq * 0.26;
+    if(shad){ c.fillStyle = 'rgba(15,23,42,.13)'; c.beginPath(); c.ellipse(fx0, fy0 + sq * 0.08, sq * 0.5, sq * 0.15, 0, 0, TAU); c.fill(); }
     paintTote(c, fx0, fy0, sq, col, mood, 0, 0);
     sp = {cv:cv2, w:W2, h:H2, ox:fx0, oy:fy0};
     toteCache.set(key, sp);
@@ -1637,14 +1673,15 @@ function drawAnt(a, o, isTarget){
     return;
   }
   const walk = a.mv > 0.1 && a.l < 0.3, mood = low || o.overdue;
-  if(a.l < 0.5){ ctx.fillStyle = 'rgba(15,23,42,.13)'; ctx.beginPath(); ctx.ellipse(x, y + s * 0.08, s * 0.5, s * 0.15, 0, 0, TAU); ctx.fill(); }
+  const shad = a.l < 0.5;
+  if(shad && (walk || isTarget)){ ctx.fillStyle = 'rgba(15,23,42,.13)'; ctx.beginPath(); ctx.ellipse(x, y + s * 0.08, s * 0.5, s * 0.15, 0, 0, TAU); ctx.fill(); }
   if(isTarget){ ctx.fillStyle = 'rgba(250,204,21,.55)'; ctx.beginPath(); ctx.ellipse(x, y + s * 0.06, s * 0.78, s * 0.28, 0, 0, TAU); ctx.fill(); }
   let by;
   if(walk || isTarget){
     const hop = walk ? Math.abs(Math.sin(a.ph)) * s * 0.16 : 0, lg = walk ? Math.sin(a.ph) * s * 0.18 : 0;
     by = paintTote(ctx, x, y, s, col, mood, lg, hop);
   } else {
-    const sp = toteSprite(col, s, mood);
+    const sp = toteSprite(col, s, mood, shad);
     ctx.drawImage(sp.cv, x - sp.ox, y - sp.oy, sp.w, sp.h);
     by = y - s * 0.9;
   }
@@ -1736,21 +1773,23 @@ function drawPack(){
   }
   if(tier === 0 || tier === 2){        // 롤러
     ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = Math.max(2, R * 0.05);
+    ctx.beginPath();
     for(let i = 0; i < 36; i++){
       const a = railAngle + i * TAU / 36;
-      ctx.beginPath();
       ctx.moveTo(Math.cos(a) * (RR - R * 0.26), Math.sin(a) * (RR - R * 0.26));
-      ctx.lineTo(Math.cos(a) * (RR + R * 0.26), Math.sin(a) * (RR + R * 0.26)); ctx.stroke();
+      ctx.lineTo(Math.cos(a) * (RR + R * 0.26), Math.sin(a) * (RR + R * 0.26));
     }
+    ctx.stroke();
   } else if(tier === 1){               // 벨트: 흐르는 화살표
     ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = Math.max(1.5, R * 0.05);
+    ctx.beginPath();
     for(let i = 0; i < 24; i++){
       const a = railAngle + i * TAU / 24, s = (S.spin === 'cw' ? 1 : -1) * 0.06;
-      ctx.beginPath();
       ctx.moveTo(Math.cos(a - s) * (RR - R * 0.16), Math.sin(a - s) * (RR - R * 0.16));
       ctx.lineTo(Math.cos(a + s) * RR, Math.sin(a + s) * RR);
-      ctx.lineTo(Math.cos(a - s) * (RR + R * 0.16), Math.sin(a - s) * (RR + R * 0.16)); ctx.stroke();
+      ctx.lineTo(Math.cos(a - s) * (RR + R * 0.16), Math.sin(a - s) * (RR + R * 0.16));
     }
+    ctx.stroke();
   } else if(tier === 3){               // 크로스벨트 소터: 알록달록 칸
     const cols = ['#60a5fa', '#f472b6', '#facc15', '#4ade80', '#a78bfa', '#fb923c'];
     ctx.lineWidth = R * 0.42;
@@ -2035,7 +2074,7 @@ function drawBunting(){
 }
 function draw(){
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  if(bg) ctx.drawImage(bg, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
   // 60건 넘으면 화면이 덜덜 흔들림
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   drawChannels(); drawInbound(); drawRack(); drawPick(); drawPack();
@@ -2243,9 +2282,19 @@ window.addEventListener('pointerup', e => { if(drag && e.pointerId === drag.id) 
 window.addEventListener('blur', () => { drag = null; tap = null; });
 document.addEventListener('visibilitychange', () => { if(document.hidden){ drag = null; tap = null; } });
 
+// 프레임이 계속 밀리면 화질(해상도)을 한 단계씩 낮춰서 부드럽게
+let dprCap = 2, perfT = 0, perfN = 0, perfSlow = 0;
+function perfWatch(dt){
+  if(document.hidden) return;
+  perfT += dt; perfN++;
+  if(perfT < 2) return;
+  const fps = perfN / perfT; perfT = 0; perfN = 0;
+  if(fps < 45){ if(++perfSlow >= 2 && dprCap > 1){ dprCap = Math.max(1, Math.min(dprCap, window.devicePixelRatio || 1) - 0.25); perfSlow = 0; resize(); } }
+  else perfSlow = 0;
+}
 function resize(){
   const r = cv.getBoundingClientRect();
-  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  dpr = Math.min(window.devicePixelRatio || 1, 2, dprCap);
   W = r.width; H = r.height;
   cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
   layout();
@@ -2543,7 +2592,8 @@ $('resetBtn').onclick = () => {
 let last = performance.now(), uiT = 0, saveT = 0, errCount = 0;
 function loop(t){
   now = t;
-  const dt = Math.min(0.1, (t - last) / 1000); last = t;
+  const rawDt = (t - last) / 1000, dt = Math.min(0.1, rawDt); last = t;
+  if(rawDt < 0.5) perfWatch(rawDt);
   // 한 프레임에서 오류가 나도 게임 전체가 멈추지 않게
   try{ if(W > 0 && !S.night && $('ending').classList.contains('hidden')) update(dt); }
   catch(err){ console.error('[update]', err); errCount++; }
