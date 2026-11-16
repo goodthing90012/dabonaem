@@ -1457,13 +1457,18 @@ function inExitLane(x, y){
 const surge = {lv:0, t:0};
 const pileLbl = {x:0, y:0, t:'', lvl:-1, show:0};
 // ── 점 군중: 쌓인 건수만큼 실제 점을 그림 (최대 MAXDOTS개, 넘으면 1점 = 여러 건)
-const MAXDOTS = 2500, DOT_LIFT = 0.075;   // 큼직한 택배 상자 최대 2,500개 (넘으면 1개 = 여러 건)
+const MAXDOTS = 5000, DOT_LIFT = 0.075;   // 점 최대 5,000개 (넘으면 1점 = 여러 건)
 let dotSlots = [], dpp = 1, dotTopY = 0, dotUsed = 0;
 const crowds = new Map();          // order.id → {k, xs, ys, ls}
 // 주문 컨테이너: 물량이 늘수록 점점 작아지며 화면을 채우다가, TOTE_MAX묶음을 넘으면 작은 점 상자로 넘어감
 const TOTE_MAX = 600, OUT_MAX = 600;   // 이 개수까지는 상자로 그리고, 넘으면 점으로 (그 즈음엔 크기가 점과 거의 같음)
 let bigInOn = true, kIn = 1;
+let smallN = true;
 function frontN(){
+  // 1묶음이 여러 건이 되면(후반) 컨테이너 대신 실제 건수만큼 점으로 → 산더미가 폭풍처럼 쌓여 보이게
+  const cn = curN();
+  if(smallN && cn > 3.5) smallN = false; else if(!smallN && cn < 2.5) smallN = true;
+  if(!smallN) return 0;
   const n = S.orders.length;
   if(bigInOn && n > TOTE_MAX) bigInOn = false;
   else if(!bigInOn && n < TOTE_MAX * 0.7) bigInOn = true;
