@@ -551,17 +551,17 @@ function strike(ct){
   if(ct.cancels > ct.limit + 2) endContract(ct, false);      // 위약금 구간도 넘김 → 해지
   else if(ct.cancels > ct.limit) chargePenalty(ct, 1);       // 허용 초과 → 위약금
 }
-// ⏰ 택배 집하 마감: 남은 물량은 지연(단가 -30%), 화주사 물량이 남았으면 SLA 위반 1회
+// ⏰ 택배 집하 마감: 남은 물량은 지연으로 기록(단가는 그대로), 화주사 물량이 남았으면 SLA 위반 1회
 function doCutoff(h){
   let late = 0; const hit = new Set();
   for(const o of S.orders){
-    if(!o.late){ o.late = true; o.price = Math.round(o.price * 0.7); late++; }
+    if(!o.late){ o.late = true; late++; }
     if(o.br) hit.add(o.br);
   }
   S.today.late += late;
   for(const id of hit){ const ct = S.contracts.find(c => c.id === id); if(ct) strike(ct); }
   if(fx.truck.state === 'idle'){ fx.truck.state = 'leave'; fx.truck.t = 0; }
-  say(late ? `⏰ ${h}:00 집하 마감! 미출고 ${late}건 지연 (단가 -30%)` : `⏰ ${h}:00 집하 마감! 전량 출고 👍`, late ? '#dc2626' : '#16a34a', 2.6);
+  say(late ? `⏰ ${h}:00 집하 마감! 미출고 ${late}건 지연` : `⏰ ${h}:00 집하 마감! 전량 출고 👍`, late ? '#dc2626' : '#16a34a', 2.6);
   if(late) fx.flash = 0.5;
 }
 // 🌙 18:00 정산: 고정비 차감, 모자라면 운영자금 대출
@@ -847,7 +847,7 @@ function update(dt){
     // 마감(60초)을 넘기면 사라지지 않고 ⏰지연으로 남아 계속 쌓임 → 그 뒤 4분 더 지나면 고객 취소
     if(o.t <= 0 && !o.overdue){
       o.overdue = true; o.t = o.max = OVERDUE_SEC;
-      if(!o.late){ o.late = true; o.price = Math.round(o.price * 0.7); S.today.late++; }
+      if(!o.late){ o.late = true; S.today.late++; }
       if(!o.expired){ o.expired = true; S.today.expired = (S.today.expired || 0) + 1; }   // 처리기한을 실제로 넘긴 주문 (집하 마감 일괄 지연은 제외)
       const s = S.ch[o.ch]; s.rep = Math.max(0.2, s.rep - 0.02);
       if(o.br){ const ct = S.contracts.find(c => c.id === o.br); if(ct) strike(ct); }
