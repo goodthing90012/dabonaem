@@ -1515,7 +1515,7 @@ function buildDotSlots(){
       if(inExitLane(x, y)) continue;
       // 덩어리 없이: 입구 쪽부터 레일을 따라 고르게 둘러싸며 쌓임
       let da = ((a - ea) % TAU + TAU) % TAU; if(da > Math.PI) da = TAU - da;
-      ground.push({x, y, p:(rk - RR) / R * 0.3 + Math.random() * 2.2});   // 출구 레인만 빼고 패킹존 전체에 골고루 흩뿌림
+      ground.push({x, y, p:Math.random() * 3});   // 레일·출구 레인만 빼고 패킹존 전체에 완전히 골고루 흩뿌림 (적어도 전체에 퍼짐)
     }
   }
   ground.sort((a, b) => a.p - b.p);
@@ -1791,9 +1791,8 @@ function slotsFor(k){
       if(x < z.x + 8 || x > z.x + z.w - 8 || y < z.y + 32 || y > z.y + z.h - 8) continue;
       if(inExitLane(x, y)) continue;
       let da = ((a - ea) % TAU + TAU) % TAU; if(da > Math.PI) da = TAU - da;
-      ground.push({x, y, p:(rk - RR) / R * 0.35 + Math.random() * 2.0});   // 출구 레인만 빼고 전체에 흩뿌림
+      ground.push({x, y, p:Math.random() * 3});   // 레일·출구 레인만 빼고 전체에 골고루
     }
-    if(ground.length > TOTE_MAX * 3) break;
   }
   ground.sort((a, b) => a.p - b.p);
   out.ground = ground.length;
