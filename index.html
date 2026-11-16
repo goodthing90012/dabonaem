@@ -1429,10 +1429,21 @@ const ants = new Map();          // order.id → {x, y, ph, mv, hidden}
 let slots = [], antSpawn = {x:0, y:0};
 // 피킹존에서 패킹존으로 넘어오는 경계선 위의 랜덤한 점 (한 줄이 아니라 넓게 퍼져서 오게)
 function spawnPt(){
-  // 주문은 전부 피킹존 쪽에서만 넓게 퍼져 나옴 (화면 가장자리에서 한 줄로 걸어오던 것 제거)
-  const pk = L.pick, pz = L.pack;
-  if(landscape) return {x:pz.x + R * 0.6 + Math.random() * R * 0.9, y:Math.max(pz.y + R, pk.y + 10 + Math.random() * (pk.h - 20))};
-  return {x:pk.x + 10 + Math.random() * (pk.w - 20), y:pz.y + R * 0.55 + Math.random() * R * 0.6};
+  // 사방에서 몰려옴: 40%는 피킹존 쪽, 나머지는 패킹존 가장자리 아무 데서나 (출구 레인 쪽만 피해서)
+  const pk = L.pick, pz = L.pack, m = R * 0.35;
+  if(Math.random() < 0.4){
+    if(landscape) return {x:pz.x + R * 0.6 + Math.random() * R * 0.9, y:Math.max(pz.y + R, pk.y + 10 + Math.random() * (pk.h - 20))};
+    return {x:pk.x + 10 + Math.random() * (pk.w - 20), y:pz.y + R * 0.55 + Math.random() * R * 0.6};
+  }
+  for(let k = 0; k < 12; k++){
+    const sd = Math.random() * 4 | 0; let x, y;
+    if(sd === 0){ x = pz.x + m + Math.random() * (pz.w - m * 2); y = pz.y + R * 0.6 + Math.random() * m; }       // 위
+    else if(sd === 1){ x = pz.x + m + Math.random() * (pz.w - m * 2); y = pz.y + pz.h - 4 - Math.random() * m; } // 아래
+    else if(sd === 2){ x = pz.x + 4 + Math.random() * m; y = pz.y + R * 0.6 + Math.random() * (pz.h - R * 0.6 - 4); }   // 왼쪽
+    else { x = pz.x + pz.w - 4 - Math.random() * m; y = pz.y + R * 0.6 + Math.random() * (pz.h - R * 0.6 - 4); }        // 오른쪽
+    if(!inExitLane(x, y)) return {x, y};
+  }
+  return {x:pk.x + pk.w / 2, y:pz.y + R * 0.6};
 }
 let pileEA = 0, rushBtn = null, exitA = Math.PI / 2;
 // 출구 레인 근처인지 (레일 바깥에서 출구 방향 ±32° 안쪽 + 레인 폭) → 거기엔 산을 안 쌓음
@@ -1561,6 +1572,7 @@ function updateDots(dt){
     const e = leaving[q], c = e.c; e.t += dt;
     let far = 0;
     for(let j = 0; j < c.k; j++){
+      if(c.xs[j] < -900) continue;   // 이미 도착해서 숨긴 점은 다시 움직이지 않음 (왼쪽 끝에서 한 줄로 걸어오던 버그)
       const dx = tx - c.xs[j], dy = ty - c.ys[j], dist = Math.hypot(dx, dy);
       if(dist > R * 0.5){ const st = Math.min(1, ls / dist); c.xs[j] += dx * st; c.ys[j] += dy * st; far++; }
       else c.xs[j] = -999;      // 도착한 점은 숨김
