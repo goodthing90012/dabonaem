@@ -2812,7 +2812,10 @@ try{ if(!localStorage.getItem(MORNING_KEY)) saveMorning(); }catch(e){}
 if(S.over) showGameOver(); else if(S.night) showReport();
 
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js').then(reg => { reg.update().catch(() => {}); }).catch(() => {});
+  // 새 버전이 설치되면 저장하고 한 번만 자동 새로고침 (예전 버전이 계속 뜨는 일 방지)
+  let swReloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if(swReloaded) return; swReloaded = true; save(); location.reload(); });
 }
 </script>
 </body>
