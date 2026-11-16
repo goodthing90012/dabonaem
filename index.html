@@ -216,8 +216,8 @@ const CH = [
   {id:'playauto', name:'플레이오토',     short:'플오',   color:'#8b5cf6', unlock:12000, rate:0.20, price:1000, st:1},
   {id:'coupang',  name:'쿠팡',          short:'쿠팡',   color:'#ef4444', unlock:9000,  rate:0.30, price:1100, via:'playauto', st:1},
   {id:'naver',    name:'네이버 스토어',  short:'네이버', color:'#22c55e', unlock:16000, rate:0.28, price:1200, via:'playauto', st:1},
-  {id:'gmarket',  name:'지마켓',        short:'G마켓',  color:'#f59e0b', unlock:25000, rate:0.26, price:1300, via:'playauto', st:2},
-  {id:'st11',     name:'11번가',        short:'11번가', color:'#ec4899', unlock:20000, rate:0.30, price:1100, via:'playauto', trait:'📦 볼륨형', st:2},
+  {id:'gmarket',  name:'지마켓',        short:'G마켓',  color:'#f59e0b', unlock:25000, rate:0.26, price:1300, via:'playauto', st:1},
+  {id:'st11',     name:'11번가',        short:'11번가', color:'#ec4899', unlock:20000, rate:0.30, price:1100, via:'playauto', trait:'📦 볼륨형', st:1},
   {id:'kakao',    name:'카카오 선물하기', short:'선물',  color:'#facc15', unlock:22000, rate:0.05, price:1500, via:'playauto', gift:true, trait:'🎁 평소 조용, 이벤트 땐 ×5', st:2},
   {id:'musinsa',  name:'무신사',        short:'무신사', color:'#27272a', unlock:30000, rate:0.12, price:2400, via:'playauto', trait:'💎 고단가', st:2},
   {id:'ohouse',   name:'오늘의집',      short:'오집',   color:'#06b6d4', unlock:35000, rate:0.18, price:2700, via:'playauto', size:2, trait:'🛋️ 대형 — 원 2바퀴에 1건', st:3},
@@ -282,10 +282,19 @@ const clockStr = () => { const m = Math.min(1080, gameMin()); return `${String(M
 function fresh(){
   const ch = {};
   CH.forEach(c => ch[c.id] = {lv: c.id === 'excel' ? 1 : 0, rep: 1});
-  return {v:3, rating:4.0, rGood:5, rBad:1, adLv:0, sound:true, autoRotLv:0, lineLv:0, railTier:0, carrier:0, st:0, autoLv:0, served:0, playTime:0, ended:false, money:3000, stock:45, cap:90, pend:[], pour:[], waveT:12, capLv:0, railLv:0, urgentLv:0, pickLv:0, shipLv:0, workers:0, trainLv:0,
+  return {v:4, rating:4.0, rGood:5, rBad:1, adLv:0, sound:true, autoRotLv:0, lineLv:0, railTier:0, carrier:0, st:0, autoLv:0, served:0, playTime:0, ended:false, money:3000, stock:45, cap:90, pend:[], pour:[], waveT:12, capLv:0, railLv:0, urgentLv:0, pickLv:0, shipLv:0, workers:0, trainLv:0,
     autoIn:false, autoOn:true, spin:'ccw', ch, orders:[], nextId:1, shipped:0, cancelled:0, earned:0,
     nextEvent:100, event:null, wp:[], lastIn:0, seenSheet:false, boosts:[], cd:{}, day:1, dayT:0, cutIdx:0, night:false, debt:0, today:freshToday(), report:null,
     contracts:[], offers:[], salesLv:0, nextOffer:30, contractsDone:0, contractsFailed:0, ctId:1};
+}
+// v3 → v4: 새 밸런스(자동화 ×1.25, 채널·레일도 물량 ↑)로 옮기면서 지금 물량 단위는 그대로 유지
+function migrateV4(s){
+  if(!s || (s.v || 0) >= 4 || !s.ch) return s;
+  const on = Object.values(s.ch).filter(c => c.lv > 0).length, tier = Math.min(5, s.railTier || 0);
+  const old = Math.pow(1.35, s.autoLv || 0), rest = Math.pow(CH_N, Math.max(0, on - 1)) * Math.pow(TIER_N, tier);
+  s.autoLv = Math.max(0, Math.round(Math.log(Math.max(1, old / rest)) / Math.log(AUTO_M)));
+  s.v = 4;
+  return s;
 }
 function load(){
   try{
@@ -301,6 +310,7 @@ function load(){
         s.served = s.shipped || 0; s.st = 0; while(s.st < 4 && s.served >= STAGES[s.st].goal) s.st++;
         s.autoLv = 0; s.playTime = 0; s.ended = false; s.v = 3;
       }
+      migrateV4(s);
       const f = fresh(); return Object.assign(f, s, {ch:Object.assign(f.ch, s.ch)});
     }
   }catch(e){}
@@ -595,7 +605,7 @@ function resetTransient(){
 }
 function retryMorning(){
   let m = null; try{ m = JSON.parse(localStorage.getItem(MORNING_KEY)); }catch(e){}
-  if(!m || !m.ch){ S = fresh(); } else { S = m; S.over = null; S.night = false; S.report = null; }
+  if(!m || !m.ch){ S = fresh(); } else { S = Object.assign(fresh(), migrateV4(m)); S.over = null; S.night = false; S.report = null; }
   // 같은 경고 상태로 다시 시작하면 바로 또 끝나니, 재도전 땐 경고를 한 번 더 줌
   S.warnDebt = 0; S.warnCancel = 0; S.warnShip = 0; S.warnLate = 0;
   resetTransient(); save(); saveMorning();
@@ -2538,7 +2548,7 @@ CH.forEach(c => ROWS.channel.push({
     if(c.via && !S.ch[c.via].lv) return '플레이오토 연동 후 열려요';
     const tr = c.trait ? c.trait + ' · ' : '';
     const fee = c.id === 'excel' ? '' : ` · 연동료 일 ${fmt(chFeeOne(c, s.lv + 1))}`;
-    if(!s.lv) return `${tr}${c.via ? '플레이오토 연동 · ' : ''}분당 약 ${(c.rate * 60).toFixed(0)}건 · 건당 ${fmt(Math.round(c.price * PRICE_M))} · 물량 단위 ×${CH_N}${fee}`;
+    if(!s.lv) return `${tr}${c.via ? '플레이오토 연동 · ' : ''}분당 약 ${(c.rate * 60).toFixed(0)}건 · 건당 ${fmt(Math.round(c.price * PRICE_M))} · 📈 물량 단위 ×${CH_N}${fee}`;
     return `${tr}분당 ${(chRate(c, false) * 60).toFixed(1)}건 · 건당 ${fmt(Math.round(c.price * PRICE_M))} · 평판 ${Math.round(s.rep * 100)}%${c.id === 'excel' ? '' : ` · 연동료 일 ${fmt(chFeeOne(c, s.lv))}→${fmt(chFeeOne(c, s.lv + 1))}`}`;
   },
   btn:() => (S.ch[c.id].lv ? '마케팅 ' : '연동 ') + fmt(chCost(c)),
@@ -2577,8 +2587,8 @@ ROWS.pick.push(
    act:() => { S.money -= urgentCost(); S.urgentLv++; }},
 );
 ROWS.pack.push(
-  {color:'#111827', up:true, title:() => `⚙️ ${autoName(S.autoLv)} Lv.${S.autoLv} · ⭐ 성장 핵심`,
-   desc:() => `가장 빨리 크는 업그레이드! 물량 단위 ×${AUTO_M} — 주문 1묶음 = ${fmtN(curN())}명 → ${fmtN(curN() * AUTO_M)}명 (매출·비용 같이 ↑)` +
+  {color:'#111827', up:true, title:() => `⚙️ ${autoName(S.autoLv)} Lv.${S.autoLv} · 📈 물량↑`,
+   desc:() => `📈 물량 단위를 키우는 3가지(자동화·채널 연동·새 레일) 중 하나 · 물량 단위 ×${AUTO_M} — 주문 1묶음 = ${fmtN(curN())}명 → ${fmtN(curN() * AUTO_M)}명 (매출·비용 같이 ↑)` +
      (Math.floor((S.autoLv + 1) / 4) > Math.floor(S.autoLv / 4) && S.autoLv + 1 < AUTO_NAMES.length * 4 ? ` · 다음: ${autoName(S.autoLv + 1)} 도입` : ''),
    btn:() => fmt(autoCost()), ok:() => S.money >= autoCost(),
    act:() => { S.money -= autoCost(); S.autoLv++; }},
@@ -2594,7 +2604,7 @@ ROWS.pack.push(
    desc:() => { const cur = RAILS[railTier()], nx = RAILS[railTier() + 1];
      if(!nx) return `한 바퀴 처리량 ×${cur.mult} · 더 좋은 레일은 없어요`;
      if(nx.st > S.st) return `🔒 ${STAGES[nx.st].icon} ${STAGES[nx.st].name} 단계에서 살 수 있어요 · 지금 ${cur.name} ×${cur.mult}`;
-     return `${cur.name} ×${cur.mult} → ${nx.name} ×${nx.mult} (한 바퀴 처리량) · 물량 단위 ×${TIER_N} · 관성 +${(0.25 * Math.log(Math.max(1.01, maxRev() / 0.04))).toFixed(1)}초 · 유지비 일 +${fmt(Math.round((nx.cost - cur.cost) * UPKEEP * curN()))}`; },
+     return `${cur.name} ×${cur.mult} → ${nx.name} ×${nx.mult} (한 바퀴 처리량) · 📈 물량 단위 ×${TIER_N} · 관성 +${(0.25 * Math.log(Math.max(1.01, maxRev() / 0.04))).toFixed(1)}초 · 유지비 일 +${fmt(Math.round((nx.cost - cur.cost) * UPKEEP * curN()))}`; },
    btn:() => { const nx = RAILS[railTier() + 1]; return !nx ? 'MAX' : nx.st > S.st ? '🔒' : fmt(railTierCost()); },
    ok:() => { const nx = RAILS[railTier() + 1]; return !!nx && nx.st <= S.st && S.money >= railTierCost(); },
    once:true, act:() => { S.money -= railTierCost(); S.railTier = railTier() + 1; say(`🚝 ${RAILS[railTier()].name} 설치 완료! 처리량 ×${RAILS[railTier()].mult}`, '#0f172a', 2.2); fx.confetti = 1.2; SFX.ding(6); }},
@@ -2700,7 +2710,7 @@ function refresh(){
       if(rate > 0){
         const m = (stg.goal - S.served) / rate / 60;
         eta = m < 1 ? ' · ⏱ 곧 다음 단계' : ` · ⏱ 약 ${m >= 600 ? '600+' : Math.ceil(m)}분`;
-        if(m > 20 && S.money >= autoCost() * 0.5) eta += ' 💡⭐핵심↑';
+        if(m > 20) eta += ' 💡📈물량↑';
       }
     }
     const narrow = innerWidth < 520 && eta;
