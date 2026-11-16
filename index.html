@@ -25,7 +25,7 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
 .stat.money.indebt{background:#fef3c7}
 .stat.warn{background:#fee2e2;color:#991b1b}
 #hud .sp{flex:1}
-#menuBtn,#mktBtn,#salesBtn{border:0;background:#f4f4f5;border-radius:12px;width:36px;height:32px;font-size:16px;cursor:pointer;position:relative;flex:0 0 auto}
+#menuBtn,#mktBtn,#salesBtn,#pauseBtn{border:0;background:#f4f4f5;border-radius:12px;width:36px;height:32px;font-size:16px;cursor:pointer;position:relative;flex:0 0 auto}
 #mktBtn{background:#fce7f3}
 #salesBtn{background:#ccfbf1}
 #mktBtn i,#salesBtn i{position:absolute;top:-3px;right:-3px;width:10px;height:10px;border-radius:50%;background:#ef4444;display:none}
@@ -78,6 +78,11 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
 .row button:disabled{background:#e4e4e7;color:#a1a1aa;cursor:default;box-shadow:0 3px 0 #d4d4d8}
 .row button.alt{background:#8b5cf6;box-shadow:0 3px 0 #6d28d9}
 .row button:not(:disabled):active{transform:translateY(2px);box-shadow:0 1px 0 #1d4ed8}
+#pauseOv{position:fixed;inset:0;background:rgba(9,9,11,.45);display:flex;align-items:center;justify-content:center;z-index:9;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#pauseOv .pbox{background:#fff;border-radius:22px;padding:22px 34px;display:flex;flex-direction:column;align-items:center;gap:4px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+#pauseOv .pi{font-size:40px;line-height:1}
+#pauseOv b{font-size:18px}
+#pauseOv span{font-size:12px;color:#71717a}
 #rebirth{position:fixed;inset:0;background:rgba(9,9,11,.55);display:flex;align-items:center;justify-content:center;z-index:11}
 #rebirth .box{background:#fff;border-radius:20px;padding:18px 16px 14px;width:min(380px,94vw);max-height:90dvh;overflow:auto}
 #rebirth h2{font-size:20px;margin-bottom:4px}
@@ -123,7 +128,7 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
   #hud{gap:4px;padding:7px 6px}
   .stat{padding:4px 6px;font-size:12px;gap:2px}
   .stat.money{font-size:13px}
-  #menuBtn,#mktBtn,#salesBtn{width:30px;height:30px;font-size:14px}
+  #menuBtn,#mktBtn,#salesBtn,#pauseBtn{width:30px;height:30px;font-size:14px}
   #boostBar span{padding:3px 5px;font-size:11px}
 }
 #hud{overflow:hidden}
@@ -151,6 +156,16 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
 .stat.money .mrow{display:flex;align-items:baseline;gap:2px}
 #moneyStat .mrow small{font-size:9.5px}
 #earned{font-style:normal;font-size:9.5px;font-weight:700;color:#15803d;opacity:.85;white-space:nowrap}
+@media (max-width:430px){
+  #hud{gap:4px;padding:6px 6px}
+  .stat{padding:4px 6px;gap:2px;font-size:12px;border-radius:10px}
+  .stat.money b{font-size:14px}
+  #earned,#moneyStat .mrow small{font-size:9px}
+  #menuBtn,#mktBtn,#salesBtn,#pauseBtn{width:28px;height:28px;font-size:13px;border-radius:10px}
+}
+@media (max-width:370px){ .stat{font-size:11px;padding:4px 5px} .stat.money b{font-size:13px} }
+#clockStat{border:0;font-family:inherit;color:inherit;cursor:pointer}
+#clockStat:active{transform:translateY(1px)}
 </style>
 </head>
 <body>
@@ -158,7 +173,7 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
   <header id="hud">
     <div class="stat money" id="moneyStat">💰<span class="mcol"><b id="money">0</b><span class="mrow"><em id="earned"></em><small id="debt"></small></span></span></div>
     <div class="stat" id="stockStat">📦<b id="stock">0</b></div>
-    <div class="stat" id="clockStat">🕘<b id="clock">D1 09:00</b></div>
+    <button class="stat" id="clockStat" aria-label="잠시 멈춤">⏸️<b id="clock">D1 09:00</b></button>
     <div id="boostBar"></div>
     <div class="sp"></div>
     <button id="salesBtn" aria-label="화주사 영업">📋<i></i></button>
@@ -203,6 +218,7 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
     <button id="nextDay">다음 날 시작 ☀️</button>
   </div>
 </div>
+<div id="pauseOv" class="hidden"><div class="pbox"><div class="pi">⏸</div><b>잠시 멈춤</b><span>화면을 누르면 계속해요</span></div></div>
 <div id="rebirth" class="hidden">
   <div class="box">
     <h2>🌀 환생</h2>
@@ -2856,7 +2872,7 @@ function refresh(){
   }
   setText($('money'), fmt(S.money));
   setText($('earned'), '누적 ' + fmt(S.earned || 0));
-  setText($('stock'), `${S.stock}/${S.cap}`);
+  setText($('stock'), innerWidth < 430 ? `${Math.round(S.stock / Math.max(1, S.cap) * 100)}%` : `${S.stock}/${S.cap}`);   // 좁은 화면은 % 로 짧게
   $('stockStat').classList.toggle('warn', S.stock <= Math.max(2, S.cap * 0.15));
   setText($('clock'), `D${S.day} ${clockStr()}`);
   {
@@ -2947,12 +2963,23 @@ $('resetBtn').onclick = () => {
 
 // ═════ 메인 루프 ═════
 let last = performance.now(), uiT = 0, saveT = 0, errCount = 0;
+// ⏸ 잠시 멈춤: 버튼·P/스페이스 키·앱 전환 시 자동, 메뉴·환생 창이 열려 있어도 멈춤
+let paused = false;
+const isPaused = () => paused || !$('menu').classList.contains('hidden') || !$('rebirth').classList.contains('hidden');
+function setPause(v){ paused = v; $('pauseOv').classList.toggle('hidden', !v); if(v){ drag = null; closeSheet(); save(); } }
+$('clockStat').onclick = () => setPause(!paused);   // 시계를 누르면 시간이 멈춤
+$('pauseOv').addEventListener('pointerdown', e => { e.preventDefault(); setPause(false); });
+window.addEventListener('keydown', e => {
+  if(e.target.closest && e.target.closest('input,textarea')) return;
+  if((e.key === 'p' || e.key === 'P' || e.key === ' ') && !e.repeat){ e.preventDefault(); setPause(!paused); }
+});
+document.addEventListener('visibilitychange', () => { if(document.hidden && !S.night) setPause(true); });
 function loop(t){
   now = t;
   const rawDt = (t - last) / 1000, dt = Math.min(0.1, rawDt); last = t;
   if(rawDt < 0.5) perfWatch(rawDt);
   // 한 프레임에서 오류가 나도 게임 전체가 멈추지 않게
-  try{ if(W > 0 && !S.night && $('ending').classList.contains('hidden')) update(dt); }
+  try{ if(W > 0 && !S.night && !isPaused() && $('ending').classList.contains('hidden')) update(dt); }
   catch(err){ console.error('[update]', err); errCount++; }
   try{ if(W > 0) draw(); }
   catch(err){ console.error('[draw]', err); errCount++; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; }
