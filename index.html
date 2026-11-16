@@ -559,9 +559,11 @@ function debtLimit(){
 const cancelRate = t => (t.shipped + t.cancelled) >= 20 ? t.cancelled / (t.shipped + t.cancelled) : 0;
 // 하루 끝에 판정: null(문제없음) · {warn:[...]} · {over:'debt'|'cancel'}
 // 미출고: 마감 때 남은 주문이 30묶음 이상이면서 오늘 출고한 것보다 많으면
-const shipBad = () => S.orders.length >= 30 && S.orders.length > S.today.shipped;
+// 갓 들어온 주문 물결은 빼고, 처리기한을 이미 넘겨 방치된 주문만 셈
+const staleN = () => S.orders.reduce((a, o) => a + (o.overdue ? 1 : 0), 0);
+const shipBad = () => staleN() >= 30 && staleN() > S.today.shipped;
 // 지연: 오늘 지연된 주문이 30묶음 이상이면서 오늘 출고한 것보다 많으면
-const lateBad = t => t.late >= 30 && t.late > t.shipped;
+const lateBad = t => (t.expired || 0) >= 30 && (t.expired || 0) > t.shipped;
 function judgeDay(t){
   const debtBad = S.debt > debtLimit(), cancelBad = cancelRate(t) >= 0.5;
   const res = {warn:[]};
@@ -576,8 +578,8 @@ function showGameOver(){
   $('goTitle').textContent = why === 'debt' ? '💸 파산했어요' : why === 'ship' ? '📦 출고가 밀려 멈췄어요' : why === 'late' ? '⏰ 배송 지연으로 멈췄어요' : '😡 고객이 떠났어요';
   $('goReason').innerHTML = why === 'debt'
     ? `빚이 이틀 연속 대출 한도를 넘었어요.<br>빚 ${fmt(S.debt)} · 한도 ${fmt(debtLimit())}`
-    : why === 'late' ? `이틀 연속 지연된 주문이 출고보다 많았어요.<br>오늘 지연 ${S.report ? S.report.late : 0}묶음 · 출고 ${S.report ? S.report.shipped : 0}묶음`
-    : why === 'ship' ? `이틀 연속 마감 때 미출고가 출고보다 많았어요.<br>미출고 ${S.report ? S.report.unship : S.orders.length}묶음 · 오늘 출고 ${S.report ? S.report.shipped : 0}묶음`
+    : why === 'late' ? `이틀 연속 처리기한을 넘긴 주문이 출고보다 많았어요.<br>오늘 기한 초과 ${S.report ? S.report.expired : 0}묶음 · 출고 ${S.report ? S.report.shipped : 0}묶음`
+    : why === 'ship' ? `이틀 연속 마감 때 기한 넘긴 미출고가 출고보다 많았어요.<br>미출고 ${S.report ? S.report.unship : staleN()}묶음 · 오늘 출고 ${S.report ? S.report.shipped : 0}묶음`
     : `이틀 연속 주문의 절반 넘게 취소됐어요.<br>오늘 취소 ${S.report ? S.report.cancelled : 0}건 · 출고 ${S.report ? S.report.shipped : 0}건`;
   $('goDay').textContent = `D${S.day}에서 멈춤`;
   $('goStats').innerHTML = `총 출고 ${S.shipped.toLocaleString('ko-KR')}건 · 인류의 ${(S.served / WORLD * 100).toPrecision(2)}%<br>플레이 ${fmtTime(S.playTime)}`;
@@ -609,7 +611,7 @@ function endDay(){
     net:t.revenue - t.stock - t.penalty - t.mkt - fixed}, t);
   S.revHist = (S.revHist || []).concat([t.revenue]).slice(-3);
   const j = judgeDay(t);
-  S.report.warn = j.warn || []; S.report.limit = debtLimit(); S.report.crate = cancelRate(t); S.report.unship = S.orders.length;
+  S.report.warn = j.warn || []; S.report.limit = debtLimit(); S.report.crate = cancelRate(t); S.report.unship = staleN(); S.report.expired = S.today.expired || 0;
   S.night = true; drag = null;
   closeSheet();
   if(j.over){ S.over = j.over; save(); showGameOver(); return; }
@@ -640,8 +642,8 @@ function showReport(){
   ${S.debt ? `<p class="note">대출 잔액 ${fmt(S.debt)} · 내일 이자 ${fmt(interestOf())}</p>` : ''}
   <p class="note">내일 고정비 예상: ${fmt(dailyCost())} · 대출 한도 ${fmt(r.limit || debtLimit())}</p>
   ${(r.warn || []).includes('debt') ? `<p class="note" style="color:#dc2626;font-weight:800">🚨 파산 경고! 빚이 대출 한도를 넘었어요. 내일 정산 때도 넘으면 파산이에요.</p>` : ''}
-  ${(r.warn || []).includes('late') ? `<p class="note" style="color:#dc2626;font-weight:800">🚨 지연 경고! 오늘 ${r.late}묶음이 지연됐어요 (출고 ${r.shipped}). 내일도 지연이 출고보다 많으면 끝이에요.</p>` : ''}
-  ${(r.warn || []).includes('ship') ? `<p class="note" style="color:#dc2626;font-weight:800">🚨 미출고 경고! 마감 때 ${r.unship}묶음이 못 나갔어요 (오늘 출고 ${r.shipped}). 내일도 미출고가 출고보다 많으면 끝이에요.</p>` : ''}
+  ${(r.warn || []).includes('late') ? `<p class="note" style="color:#dc2626;font-weight:800">🚨 지연 경고! 오늘 ${r.expired}묶음이 처리기한을 넘겼어요 (출고 ${r.shipped}). 내일도 지연이 출고보다 많으면 끝이에요.</p>` : ''}
+  ${(r.warn || []).includes('ship') ? `<p class="note" style="color:#dc2626;font-weight:800">🚨 미출고 경고! 마감 때 처리기한을 넘긴 채 ${r.unship}묶음이 쌓여 있었어요 (오늘 출고 ${r.shipped}). 내일도 미출고가 출고보다 많으면 끝이에요.</p>` : ''}
   ${(r.warn || []).includes('cancel') ? `<p class="note" style="color:#dc2626;font-weight:800">🚨 고객 이탈 경고! 오늘 주문의 ${Math.round((r.crate || 0) * 100)}%가 취소됐어요. 내일도 절반 넘게 취소되면 끝이에요.</p>` : ''}`;
   repayLabel();
   $('report').classList.remove('hidden');
@@ -830,6 +832,7 @@ function update(dt){
     if(o.t <= 0 && !o.overdue){
       o.overdue = true; o.t = o.max = OVERDUE_SEC;
       if(!o.late){ o.late = true; o.price = Math.round(o.price * 0.7); S.today.late++; }
+      if(!o.expired){ o.expired = true; S.today.expired = (S.today.expired || 0) + 1; }   // 처리기한을 실제로 넘긴 주문 (집하 마감 일괄 지연은 제외)
       const s = S.ch[o.ch]; s.rep = Math.max(0.2, s.rep - 0.02);
       if(o.br){ const ct = S.contracts.find(c => c.id === o.br); if(ct) strike(ct); }
       S.rBad += 1;
@@ -1037,12 +1040,20 @@ function block(xc, yb, w, h, d, front, top, lw = 1.5){
   rr(x, y, w, d, rad); ctx.fillStyle = top; ctx.fill(); ctx.stroke();
 }
 function cardboard(xc, yb, s){
+  const sq = Math.round(s * 2) / 2;
+  stamp(sprite('cb' + sq, sq * 1.2, sq * 1.2, sq * 0.6, sq * 1.12, (x0, y0) => cardboardRaw(x0, y0, sq)), xc, yb);
+}
+function cardboardRaw(xc, yb, s){
   block(xc, yb, s, s * 0.6, s * 0.38, '#d9a86c', '#efc993', Math.max(1, s * 0.05));
   ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.fillRect(xc - s * 0.09, yb - s * 0.98, s * 0.18, s * 0.38);   // 테이프
   ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(xc - s * 0.09, yb - s * 0.6, s * 0.18, s * 0.6);
   if(s > 14){ ctx.fillStyle = '#fff'; ctx.fillRect(xc + s * 0.14, yb - s * 0.42, s * 0.24, s * 0.16); ctx.fillStyle = '#a8a29e'; ctx.fillRect(xc + s * 0.17, yb - s * 0.37, s * 0.17, s * 0.03); }  // 송장
 }
 function tote(xc, yb, s, color, urgent){
+  const sq = Math.round(s * 2) / 2;
+  stamp(sprite('tt' + color + sq + (urgent ? 'u' : ''), sq * 1.2, sq * 1.3, sq * 0.6, sq * 1.22, (x0, y0) => toteRaw(x0, y0, sq, color, urgent)), xc, yb);
+}
+function toteRaw(xc, yb, s, color, urgent){
   block(xc, yb, s, s * 0.5, s * 0.32, color, shade(color, 0.45), Math.max(1, s * 0.06));
   ctx.fillStyle = 'rgba(255,255,255,.3)'; rr(xc - s * 0.42, yb - s * 0.46, s * 0.12, s * 0.38, s * 0.06); ctx.fill();
   ctx.fillStyle = shade(color, -0.35);
@@ -1193,8 +1204,30 @@ function label(z, text, badge, warn){
 }
 
 // ═════ 존별 그리기 ═════
+// 바뀐 게 없으면 지난번에 그린 존 그림을 그대로 찍음
+const zoneCache = {};
+function cachedZone(name, z, sig, fn){
+  const pad = 14, w = z.w + pad * 2, h = z.h + pad * 2;
+  let e = zoneCache[name];
+  const cw = Math.ceil(w * dpr), ch = Math.ceil(h * dpr);
+  if(!e || e.cv.width !== cw || e.cv.height !== ch || e.x !== z.x || e.y !== z.y){ e = zoneCache[name] = {cv:document.createElement('canvas'), sig:null, x:z.x, y:z.y}; e.cv.width = cw; e.cv.height = ch; }
+  if(e.sig !== sig){
+    e.sig = sig;
+    const g = e.cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cw, ch);
+    g.setTransform(dpr, 0, 0, dpr, (pad - z.x) * dpr, (pad - z.y) * dpr);
+    const saved = ctx; ctx = g;
+    try{ e.ret = fn(); } finally { ctx = saved; }
+  }
+  ctx.drawImage(e.cv, z.x - pad, z.y - pad, w, h);
+  return e.ret;
+}
 const chPos = {};
 function drawChannels(){
+  if(Object.values(fx.chPulse).some(v => v > 0.01)) return drawChannelsRaw();
+  const sig = CH.map(c => S.ch[c.id].lv + (evMult(c.id) > 1 ? 'f' : '')).join() + '|' + S.pend.length + '|' + S.pend.map(e => e.ch).join() + '|' + Math.ceil(S.waveT) + '|' + sheetBadge('channel') + landscape + S.st;
+  cachedZone('channels', L.channels, sig, drawChannelsRaw);
+}
+function drawChannelsRaw(){
   const z = L.channels;
   // 연동한 채널 + 다음에 열 수 있는 채널 2개만 표시
   // 채널이 많아져서: 레벨 높은 연동 채널 6개 + 다음에 열 채널 1개만 아이콘으로, 나머지는 +N
@@ -1286,6 +1319,9 @@ function drawInbound(){
   label(z, '📥 입하', S.autoIn ? false : sheetBadge('stock'));
 }
 function drawRack(){
+  cachedZone('rack', L.rack, [S.stock, S.cap, S.capLv, S.autoIn, sheetBadge('stock')].join(), drawRackRaw);
+}
+function drawRackRaw(){
   const z = L.rack;
   const cols = Math.min(7, 3 + Math.floor(S.capLv / 2)), levels = 3;
   const x0 = z.x + 10, x1 = z.x + z.w - 10, yTop = z.y + 32, yBot = z.y + z.h - 22;
@@ -1746,6 +1782,19 @@ function toteSprite(col, s, mood, shad){
   }
   return sp;
 }
+let pileCv = null, pileSig = -1;
+function drawPile(list, sig){
+  if(!list.length){ pileSig = -1; return; }
+  if(!pileCv || pileCv.width !== cv.width || pileCv.height !== cv.height){ pileCv = document.createElement('canvas'); pileCv.width = cv.width; pileCv.height = cv.height; pileSig = -1; }
+  if(sig !== pileSig){
+    pileSig = sig;
+    const g = pileCv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, pileCv.width, pileCv.height); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    list.sort((p, q) => (p[0].y + p[0].l * 0.01) - (q[0].y + q[0].l * 0.01));
+    const saved = ctx; ctx = g;
+    try{ for(const [a, o] of list) drawAnt(a, o, false); } finally { ctx = saved; }
+  }
+  ctx.drawImage(pileCv, 0, 0, W, H);
+}
 function drawAnt(a, o, isTarget){
   const s = R * 0.3 * kIn * (o.size > 1 ? 1.4 : 1), tiny = s < 11;
   const low = o.t / o.max < 0.3;
@@ -1827,13 +1876,7 @@ function boxPacking(xc, yb, s, prog){
     ctx.fillStyle = '#f8e7c4'; ctx.fillRect(xc - s * 0.09, top, s * 0.18, s * 0.36);
   }
 }
-function drawPack(){
-  const z = L.pack, RR = R * 1.85;
-  const nOrd = S.orders.length;
-  // 컨테이너 레일 링 (살짝 눌린 원 = 3/4 시점)
-  const ky = KY;
-  ctx.save(); ctx.translate(cx, cy); ctx.scale(1, ky);
-  const tier = railTier();
+function ringBase(tier, RR){
   const BAND = ['#cbd5e1', '#334155', '#e2e8f0', '#f8fafc', '#fed7aa', '#cffafe'];
   const SIDE = ['#64748b', '#0f172a', '#475569', '#334155', '#9a3412', '#0e7490'];
   ctx.lineWidth = R * 0.7; ctx.strokeStyle = 'rgba(30,41,59,.10)';
@@ -1846,6 +1889,23 @@ function drawPack(){
   ctx.beginPath(); ctx.arc(0, 0, RR - R * 0.27, 0, TAU); ctx.stroke();
   ctx.strokeStyle = 'rgba(15,23,42,.18)';
   ctx.beginPath(); ctx.arc(0, 0, RR + R * 0.27, 0, TAU); ctx.stroke();
+}
+function drawPack(){
+  const z = L.pack, RR = R * 1.85;
+  const nOrd = S.orders.length;
+  // 컨테이너 레일 링 (살짝 눌린 원 = 3/4 시점)
+  const ky = KY;
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(1, ky);
+  const tier = railTier();
+  const BAND = ['#cbd5e1', '#334155', '#e2e8f0', '#f8fafc', '#fed7aa', '#cffafe'];
+  const SIDE = ['#64748b', '#0f172a', '#475569', '#334155', '#9a3412', '#0e7490'];
+  ctx.restore();
+  { // 레일 바탕(그림자·띠·테두리)은 한 번 그려두고 찍음 — 도는 롤러만 매 프레임
+    const ext = RR + R * 0.45, key = 'ring' + tier + (rushT > 0 ? 'r' : '') + Math.round(R * 10);
+    const sp = sprite(key, ext * 2, ext * 2 * ky + R * 0.5, ext, ext * ky, (x0, y0) => { ctx.save(); ctx.translate(x0, y0); ctx.scale(1, ky); ringBase(tier, RR); ctx.restore(); });
+    stamp(sp, cx, cy);
+  }
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(1, ky);
   if(tier === 5){ // 자기부상: 빛나는 띠
     ctx.lineWidth = R * 0.14; ctx.strokeStyle = 'rgba(34,211,238,.6)';
     ctx.beginPath(); ctx.arc(0, 0, RR, 0, TAU); ctx.stroke();
@@ -1917,11 +1977,16 @@ function drawPack(){
   drawExitLane();
   drawDots();
   // 레일 앞으로 몰려든 주문 개미떼
-  const tg0 = playerTarget();
+  // 걸어오는 상자·맨 앞 상자만 매 프레임 그리고, 자리 잡은 상자들은 한 장으로 묶어서 찍음
+  const tg0 = playerTarget(), settled = [];
+  let sig = Math.round(kIn * 60);
   for(const o of S.orders){
     const a = ants.get(o.id);
-    if(a && !a.hidden) items.push({y:a.y + a.l * 0.01, draw:() => drawAnt(a, o, o === tg0)});
+    if(!a || a.hidden) continue;
+    if(o === tg0 || a.mv > 0.1) items.push({y:a.y + a.l * 0.01, draw:() => drawAnt(a, o, o === tg0)});
+    else { settled.push([a, o]); sig = (sig * 31 + o.id * 7 + (o.urgent ? 1 : 0) + (o.overdue ? 2 : 0) + (o.t / o.max < 0.3 ? 4 : 0) + Math.round(a.x) * 3 + Math.round(a.y)) % 1000000007; }
   }
+  drawPile(settled, sig);
   for(let i = 0; i < 4; i++){
     const a = railAngle + i * TAU / 4;
     items.push({y:cy + Math.sin(a) * RR * ky, draw:() => tote(cx + Math.cos(a) * RR, cy + Math.sin(a) * RR * ky + R * 0.14, R * 0.42, '#60a5fa')});
@@ -1956,7 +2021,7 @@ function drawPack(){
   items.push({y:cy, draw:() => {
     chibi(cx, cy - R * 0.5, R * 0.85, '#3b82f6', '#fde047', playerBob * 3);
     const tw = R * 1.7;
-    block(cx, cy + R * 0.5, tw, R * 0.42, R * 0.4, '#b45309', '#d97706', 2);
+    stamp(sprite('table' + Math.round(R * 10), tw + 6, R * 0.95, tw / 2 + 3, R * 0.9, (x0, y0) => block(x0, y0, tw, R * 0.42, R * 0.4, '#b45309', '#d97706', 2)), cx, cy + R * 0.5);
     const bs = R * 0.72 * (1 + fx.pop * 0.18);
     boxPacking(cx - R * 0.15, cy + R * 0.05, bs, prog);
     if(tgt) tote(cx + R * 0.58, cy + R * 0.02, R * 0.38, tgt.urgent ? '#ef4444' : chDef(tgt.ch).color, tgt.urgent);
@@ -2129,6 +2194,11 @@ function drawPack(){
   }
 }
 function drawOut(){
+  const tk = fx.truck;
+  if(tk.state !== 'idle') return drawOutRaw();
+  return cachedZone('out', L.out, [Math.min(Math.floor(tk.load / SCALE), 8), S.shipped, sheetBadge('out'), S.carrier, landscape].join(), drawOutRaw);
+}
+function drawOutRaw(){
   const z = L.out, tk = fx.truck;
   const s = landscape ? Math.min(z.w * 0.36, 52) : Math.min(z.h * 0.5, 50);
   const tx0 = landscape ? z.x + z.w / 2 - s * 0.1 : z.x + z.w * 0.6;
@@ -2636,8 +2706,8 @@ function refresh(){
   }
   if(!S.night){
     if(S.warnDebt) parts.push(S.debt > debtLimit() ? `🚨 빚이 한도 초과 — 오늘 정산 전까지 ${fmt(S.debt - debtLimit())} 갚아야 해요` : '✅ 빚이 한도 안으로 들어왔어요');
-    if(S.warnLate) parts.push(`🚨 지연 경고 · 오늘 지연 ${S.today.late} / 출고 ${S.today.shipped}`);
-    if(S.warnShip) parts.push(`🚨 미출고 경고 · 지금 ${S.orders.length}묶음 대기 / 오늘 출고 ${S.today.shipped}`);
+    if(S.warnLate) parts.push(`🚨 지연 경고 · 오늘 기한 초과 ${S.today.expired || 0} / 출고 ${S.today.shipped}`);
+    if(S.warnShip) parts.push(`🚨 미출고 경고 · 기한 넘긴 대기 ${staleN()}묶음 / 오늘 출고 ${S.today.shipped}`);
     if(S.warnCancel){ const t = S.today, n = t.shipped + t.cancelled; parts.push(`🚨 고객 이탈 경고 · 오늘 취소율 ${n ? Math.round(t.cancelled / n * 100) : 0}%`); }
   }
   if(parts.length){
