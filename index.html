@@ -1316,6 +1316,21 @@ function box5(u, w, h, x, y, pc){
   q -= w; u[q - 2] = a; u[q - 1] = a; u[q] = t; u[q + 1] = a; u[q + 2] = a;   // 가운데 테이프 자국
   q -= w; u[q - 2] = t; u[q - 1] = t; u[q] = t; u[q + 1] = t; u[q + 2] = t;   // 윗면
 }
+// 출고 택배 위치: 포장대 → 출구 레인 → 출고존에서 퍼짐
+function outPos(f, E){
+  const sx = cx - R * 0.15, sy = cy + R * 0.2, pxv = -Math.sin(exitA), pyv = Math.cos(exitA);
+  if(f.t < 0.55){ const k = f.t / 0.55; return {x:sx + (E.x - sx) * k + pxv * f.off * k, y:sy + (E.y - sy) * k + pyv * f.off * k}; }
+  const k = (f.t - 0.55) / 0.45, e = 1 - (1 - k) * (1 - k), o = f.off * (1 - k);
+  return {x:E.x + (f.gx - E.x) * e + pxv * o, y:E.y + (f.gy - E.y) * e + pyv * o};
+}
+// 처음엔 큼직한 상자로, 한꺼번에 많이 나가면 작은 점 상자로 (경계에서 깜빡이지 않게 여유를 둠)
+let bigOutOn = true;
+function bigOut(){
+  const n = outflow.length;
+  if(bigOutOn && n > 70) bigOutOn = false;
+  else if(!bigOutOn && n < 25) bigOutOn = true;
+  return bigOutOn;
+}
 function drawDots(){
   if((!dotUsed && !leaving.length && !outflow.length) || !dotU32) return;
   const u = dotU32, w = dotW, h = dotH, lift = R * DOT_LIFT;
@@ -1332,15 +1347,12 @@ function drawDots(){
     for(let j = 0; j < c.k; j++) box5(u, w, h, c.xs[j] | 0, (c.ys[j] - c.ls[j] * lift) | 0, pc);
   }
   // 출구로 나가는 택배 상자 (갈색 3×3)
-  if(outflow.length){
-    const BOX = PAL.box[0], BOXT = PAL.box[1], E = exitPoint(), D = dockPt, sx = cx - R * 0.15, sy = cy + R * 0.2;
-    const pxv = -Math.sin(exitA), pyv = Math.cos(exitA);
+  if(outflow.length && !bigOut()){
+    const E = exitPoint();
     for(const f of outflow){
       if(f.t < 0) continue;
-      let x, y;
-      if(f.t < 0.55){ const k = f.t / 0.55; x = sx + (E.x - sx) * k + pxv * f.off * k; y = sy + (E.y - sy) * k + pyv * f.off * k; }
-      else { const k = (f.t - 0.55) / 0.45, e = 1 - (1 - k) * (1 - k), o = f.off * (1 - k); x = E.x + (f.gx - E.x) * e + pxv * o; y = E.y + (f.gy - E.y) * e + pyv * o; }   // 출고존에서 퍼짐
-      box5(u, w, h, x | 0, y | 0, PAL.box);
+      const q = outPos(f, E);
+      box5(u, w, h, q.x | 0, q.y | 0, PAL.box);
     }
   }
   dotCx.putImageData(dotImg, 0, 0);
@@ -1573,6 +1585,15 @@ function drawPack(){
   for(let i = 0; i < 4; i++){
     const a = railAngle + i * TAU / 4;
     items.push({y:cy + Math.sin(a) * RR * ky, draw:() => tote(cx + Math.cos(a) * RR, cy + Math.sin(a) * RR * ky + R * 0.14, R * 0.42, '#60a5fa')});
+  }
+  // 큼직한 출고 택배 (물량이 적을 때)
+  if(outflow.length && bigOut()){
+    const E = exitPoint(), bs = R * 0.3;
+    for(const f of outflow){
+      if(f.t < 0) continue;
+      const q = outPos(f, E);
+      items.push({y:q.y, draw:() => cardboard(q.x, q.y, bs)});
+    }
   }
   // 작업자 (레일이 돌 때만 같이 포장)
   const tgtW = playerTarget();
