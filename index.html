@@ -412,7 +412,7 @@ const repeatRate = () => 0.3 * Math.log10(1 + (S.served || 0) / 500);
 function chRate(c, withEv = true){
   const s = S.ch[c.id]; if(!s.lv) return 0;
   const burst = c.burst ? (withEv ? ((S.playTime % 30) < 5 ? 6 : 0) : 1) : 1;   // 틱톡: 30초 중 5초만 ×6
-  return IN_M * c.rate * (1 + 0.4 * (s.lv - 1)) * (0.35 + 0.65 * s.rep) * burst * ratingMult() * adMult() * (withEv ? evMult(c.id) : 1);
+  return IN_M * (isFinal() ? FINAL_IN : 1) * c.rate * (1 + 0.4 * (s.lv - 1)) * (0.35 + 0.65 * s.rep) * burst * ratingMult() * adMult() * (withEv ? evMult(c.id) : 1);
 }
 const r100 = v => Math.round(v / 100) * 100;
 function chCost(c){ const s = S.ch[c.id]; return s.lv ? upc((c.unlock || 1500) * 0.7 * Math.pow(1.6, s.lv - 1)) : upc(c.unlock); }
@@ -425,8 +425,10 @@ const hireCost = () => upc(2500 * Math.pow(1.65, S.workers));
 const trainCost = () => upc(4000 * Math.pow(1.8, S.trainLv));
 const chOn = () => CH.reduce((a, c) => a + (S.ch[c.id].lv > 0 ? 1 : 0), 0);
 // 📈 규모의 경제: 많이 보낼수록 1묶음이 저절로 커짐 (누적 고객 1만 명 기준, 10배마다 ×1.41) — 가끔 업그레이드하는 플레이로 전 인류 ~45분
+// 🛍️ 마지막 '전 인류' 단계 = 글로벌 블랙프라이데이: 주문 ×3, 잘게 쪼개진 주문(1묶음 ×0.4) — 처리할 상자가 폭증
+const FINAL_IN = 3, FINAL_N = 0.4, isFinal = () => S.st >= 4 && S.st < STAGES.length;
 const SCALE_E = 0.15;   // ※ 마지막 '전 인류' 단계 진출 때는 단계 보너스(×5)가 없음 — 47억→82억 구간이 순식간에 끝나지 않게
-const curN = () => N_M * Math.pow(Math.max(1, (S.served || 0) / 1e4), SCALE_E) * Math.pow(STAGE_BOOST, Math.min(S.st, 3)) * Math.pow(AUTO_M, S.autoLv) * Math.pow(CH_N, Math.max(0, chOn() - 1)) * Math.pow(TIER_N, railTier());   // 주문 1묶음 = 고객 n명
+const curN = () => N_M * Math.pow(Math.max(1, (S.served || 0) / 1e4), SCALE_E) * Math.pow(STAGE_BOOST, Math.min(S.st, 3)) * (isFinal() ? FINAL_N : 1) * Math.pow(AUTO_M, S.autoLv) * Math.pow(CH_N, Math.max(0, chOn() - 1)) * Math.pow(TIER_N, railTier());   // 주문 1묶음 = 고객 n명
 const unitCost = () => UNIT_COST * curN();
 const autoCost = () => upc(AUTO_BASE * Math.pow(AUTO_G, S.autoLv));
 const autoName = lv => AUTO_NAMES[Math.min(AUTO_NAMES.length - 1, Math.floor(lv / 4))];
@@ -792,7 +794,7 @@ function update(dt){
     if(S.st >= STAGES.length){ finishGame(); break; }
     const nx = STAGES[S.st];
     say(`🎉 ${done.icon} ${done.name} 커버 완료!`, '#7c3aed', 3);
-    say(S.st >= 4 ? `${nx.icon} ${nx.name} — 마지막 관문! 보너스 없이 끝까지` : `${nx.icon} ${nx.name} 진출 · 물량 단위 ×${STAGE_BOOST}`, '#7c3aed', 3);
+    say(S.st >= 4 ? `🛍️ 블랙프라이데이! 주문 3배 폭주` : `${nx.icon} ${nx.name} 진출 · 물량 단위 ×${STAGE_BOOST}`, '#7c3aed', 3);
     fx.confetti = 2.5;
     const opened = CH.filter(c => c.st === S.st).map(c => c.name);
     if(opened.length) say(`🔓 새 채널: ${opened.join(', ')}`, '#0f766e', 3);
@@ -2276,7 +2278,7 @@ function drawOutRaw(){
   return {x:tx0 - s * 0.3, y:ty - s * 0.6};
 }
 function drawBunting(){
-  if(!S.event || S.event.phase !== 'live') return;
+  if(!isFinal() && (!S.event || S.event.phase !== 'live')) return;
   const cols = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7'];
   ctx.strokeStyle = '#78716c'; ctx.lineWidth = 1.2;
   ctx.beginPath(); ctx.moveTo(0, 3); ctx.quadraticCurveTo(W / 2, 16, W, 3); ctx.stroke();
@@ -2781,6 +2783,7 @@ function refresh(){
     const h = CUTOFFS[S.cutIdx], sec = (h * 60 - gameMin()) / 540 * DAY_SEC;
     if(sec <= 35) parts.push(`⏰ ${h}:00 ${h === 18 ? '마지막 ' : ''}집하 마감 ${Math.ceil(sec)}초 · 미출고 ${S.orders.length}건`);
   }
+  if(isFinal() && !S.night) parts.push('🛍️ 글로벌 블랙프라이데이 · 주문 ×3 폭주 중!');
   if(!S.night){
     if(S.warnDebt) parts.push(S.debt > debtLimit() ? `🚨 빚이 한도 초과 — 오늘 정산 전까지 ${fmt(S.debt - debtLimit())} 갚아야 해요` : '✅ 빚이 한도 안으로 들어왔어요');
     if(S.warnLate) parts.push(`🚨 지연 경고 · 오늘 기한 초과 ${S.today.expired || 0} / 출고 ${S.today.shipped}`);
