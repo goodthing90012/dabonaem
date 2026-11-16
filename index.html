@@ -2759,7 +2759,7 @@ function refresh(){
       const rate = (S.served - etaHist[0][1]) / (tn - etaHist[0][0]);
       if(rate > 0){
         const m = (stg.goal - S.served) / rate / 60;
-        eta = m < 1 ? ' · ⏱ 곧 다음 단계' : ` · ⏱ 약 ${m >= 600 ? '600+' : Math.ceil(m)}분`;
+        eta = m < 1 ? ' · ⏱ 곧 다음 단계' : m > 120 ? ' · ⏱ 지금 속도론 2시간+' : ` · ⏱ 약 ${Math.ceil(m)}분`;
         if(m > 20) eta += ' 💡📈물량↑';
       }
     }
