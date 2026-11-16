@@ -992,25 +992,62 @@ function chibi(x, yb, s, vest, hat, bob = 0, face = 1){
   ctx.lineJoin = 'miter';
 }
 function truck(x, yb, s, cabColor, load, label){
-  shadow(x, yb, s * 1.1);
-  ctx.lineWidth = Math.max(1.2, s * 0.05); ctx.strokeStyle = OUT;
-  rr(x - s * 1.05, yb - s * 0.95, s * 1.45, s * 0.8, s * 0.1); ctx.fillStyle = '#fff'; ctx.fill(); ctx.stroke();
-  ctx.fillStyle = cabColor; ctx.fillRect(x - s * 1.04, yb - s * 0.42, s * 1.43, s * 0.1);
+  const F = 'Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif';
+  const dk = shade(cabColor, -0.45), lw = Math.max(1.2, s * 0.045);
+  ctx.fillStyle = 'rgba(30,41,59,.14)'; ctx.beginPath(); ctx.ellipse(x - s * 0.05, yb, s * 1.15, s * 0.16, 0, 0, TAU); ctx.fill();
+  ctx.lineJoin = 'round'; ctx.lineWidth = lw;
+  // 짐칸: 흰 탑차 + 아래 그림자 띠 + 회사 색 줄
+  const bx = x - s * 1.08, by = yb - s * 1.0, bw = s * 1.5, bh = s * 0.8;
+  rr(bx, by, bw, bh, s * 0.1); ctx.fillStyle = '#fbfbfd'; ctx.fill(); ctx.strokeStyle = '#64748b'; ctx.stroke();
+  ctx.save(); rr(bx, by, bw, bh, s * 0.1); ctx.clip();
+  ctx.fillStyle = 'rgba(100,116,139,.12)'; ctx.fillRect(bx, by + bh * 0.78, bw, bh * 0.22);
+  ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fillRect(bx, by, bw, bh * 0.1);
+  ctx.fillStyle = cabColor; ctx.fillRect(bx, by + bh * 0.6, bw, bh * 0.1);
+  ctx.fillStyle = shade(cabColor, 0.5); ctx.fillRect(bx, by + bh * 0.7, bw, bh * 0.04);
+  // 실린 택배 (짐칸 창으로 보임)
   const n = Math.min(Math.floor(load / SCALE), 8);
   for(let i = 0; i < n; i++){
-    const col = i % 4, row = Math.floor(i / 4);
-    ctx.fillStyle = '#d9a86c'; ctx.strokeStyle = '#a16207'; ctx.lineWidth = 1;
-    rr(x - s * 0.98 + col * s * 0.33, yb - s * 0.88 + row * s * 0.22, s * 0.28, s * 0.18, 2); ctx.fill(); ctx.stroke();
+    const col = i % 4, row = 1 - Math.floor(i / 4);
+    const qx = bx + s * 0.08 + col * s * 0.34, qy = by + s * 0.1 + row * s * 0.2;
+    ctx.fillStyle = '#a16207'; rr(qx, qy, s * 0.3, s * 0.18, 2); ctx.fill();
+    ctx.fillStyle = '#d9a86c'; rr(qx + 0.8, qy + 0.8, s * 0.3 - 1.6, s * 0.18 - 1.6, 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fillRect(qx + s * 0.13, qy + 1, s * 0.04, s * 0.18 - 2);
   }
-  if(label && n < 5){ ctx.fillStyle = cabColor; ctx.font = `800 ${Math.round(s * 0.24)}px Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, x - s * 0.32, yb - s * 0.62); }
-  ctx.strokeStyle = OUT; ctx.lineWidth = Math.max(1.2, s * 0.05);
-  rr(x + s * 0.42, yb - s * 0.72, s * 0.55, s * 0.6, s * 0.14); ctx.fillStyle = cabColor; ctx.fill(); ctx.stroke();
-  rr(x + s * 0.6, yb - s * 0.64, s * 0.3, s * 0.22, s * 0.06); ctx.fillStyle = '#bfdbfe'; ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.arc(x + s * 0.92, yb - s * 0.24, s * 0.05, 0, TAU); ctx.fill();
-  for(const wx of [x - s * 0.7, x + s * 0.65]){
-    ctx.beginPath(); ctx.arc(wx, yb - s * 0.1, s * 0.15, 0, TAU); ctx.fillStyle = '#3f3f46'; ctx.fill();
-    ctx.beginPath(); ctx.arc(wx, yb - s * 0.1, s * 0.06, 0, TAU); ctx.fillStyle = '#d4d4d8'; ctx.fill();
+  ctx.restore();
+  // 뒷문 경첩 선
+  ctx.strokeStyle = 'rgba(100,116,139,.45)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(bx + s * 0.05, by + bh * 0.12); ctx.lineTo(bx + s * 0.05, by + bh * 0.9); ctx.stroke();
+  if(label && n < 5){ ctx.fillStyle = dk; ctx.font = `900 ${Math.round(s * 0.26)}px ${F}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, bx + bw / 2, by + bh * 0.36); }
+  // 운전석
+  ctx.lineWidth = lw; ctx.strokeStyle = dk;
+  const cx0 = x + s * 0.44, cy0 = yb - s * 0.78, cw = s * 0.6, ch = s * 0.66;
+  ctx.beginPath();
+  ctx.moveTo(cx0, cy0 + ch); ctx.lineTo(cx0, cy0 + s * 0.06); ctx.quadraticCurveTo(cx0, cy0, cx0 + s * 0.08, cy0);
+  ctx.lineTo(cx0 + cw * 0.58, cy0); ctx.quadraticCurveTo(cx0 + cw * 0.72, cy0, cx0 + cw * 0.8, cy0 + ch * 0.14);
+  ctx.lineTo(cx0 + cw, cy0 + ch * 0.48); ctx.lineTo(cx0 + cw, cy0 + ch - s * 0.04); ctx.quadraticCurveTo(cx0 + cw, cy0 + ch, cx0 + cw - s * 0.05, cy0 + ch);
+  ctx.closePath(); ctx.fillStyle = cabColor; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.22)'; rr(cx0 + s * 0.04, cy0 + ch * 0.55, cw * 0.3, ch * 0.3, s * 0.03); ctx.fill();
+  // 앞유리 + 반사
+  ctx.beginPath(); ctx.moveTo(cx0 + cw * 0.5, cy0 + ch * 0.1); ctx.lineTo(cx0 + cw * 0.72, cy0 + ch * 0.1); ctx.lineTo(cx0 + cw * 0.9, cy0 + ch * 0.44); ctx.lineTo(cx0 + cw * 0.5, cy0 + ch * 0.44); ctx.closePath();
+  ctx.fillStyle = '#bfe3fb'; ctx.fill(); ctx.lineWidth = Math.max(1, lw * 0.8); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = Math.max(1, s * 0.035); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(cx0 + cw * 0.6, cy0 + ch * 0.36); ctx.lineTo(cx0 + cw * 0.68, cy0 + ch * 0.18); ctx.stroke(); ctx.lineCap = 'butt';
+  // 옆창 + 사이드미러
+  ctx.lineWidth = Math.max(1, lw * 0.8); ctx.strokeStyle = dk;
+  rr(cx0 + cw * 0.12, cy0 + ch * 0.12, cw * 0.3, ch * 0.3, s * 0.03); ctx.fillStyle = '#d6eefc'; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = dk; rr(cx0 + cw * 0.86, cy0 + ch * 0.2, s * 0.05, s * 0.14, s * 0.02); ctx.fill();
+  // 범퍼 + 전조등
+  ctx.fillStyle = '#94a3b8'; rr(cx0 + cw * 0.7, cy0 + ch - s * 0.1, cw * 0.34, s * 0.1, s * 0.03); ctx.fill();
+  ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.ellipse(cx0 + cw * 0.97, cy0 + ch * 0.62, s * 0.035, s * 0.06, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#f87171'; ctx.fillRect(bx - s * 0.02, by + bh * 0.8, s * 0.05, s * 0.08);      // 후미등
+  // 바퀴: 휠하우스 + 타이어 + 휠캡
+  for(const wx of [x - s * 0.72, x - s * 0.36, x + s * 0.72]){
+    ctx.fillStyle = '#334155'; ctx.beginPath(); ctx.arc(wx, yb - s * 0.12, s * 0.19, Math.PI, 0); ctx.fill();
+    ctx.beginPath(); ctx.arc(wx, yb - s * 0.12, s * 0.15, 0, TAU); ctx.fillStyle = '#27272a'; ctx.fill();
+    ctx.beginPath(); ctx.arc(wx, yb - s * 0.12, s * 0.075, 0, TAU); ctx.fillStyle = '#e2e8f0'; ctx.fill();
+    ctx.beginPath(); ctx.arc(wx, yb - s * 0.12, s * 0.025, 0, TAU); ctx.fillStyle = '#64748b'; ctx.fill();
   }
+  ctx.lineJoin = 'miter';
 }
 function forklift(x, yb, s, carry, dir = 1){
   shadow(x, yb, s * 0.6);
