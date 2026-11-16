@@ -478,6 +478,10 @@ function chRate(c, withEv = true){
 const r100 = v => Math.round(v / 100) * 100;
 function chCost(c){ const s = S.ch[c.id]; return s.lv ? upc((c.unlock || 1500) * 0.7 * Math.pow(1.6, s.lv - 1)) : upc(c.unlock); }
 const capCost = () => upc(1500 * Math.pow(1.6, S.capLv));
+const capStep = () => Math.max(90, Math.round(S.cap * 0.35 / 10) * 10);   // 랙 확장: +90 또는 지금 크기의 35% 중 큰 쪽
+// 최근 재고 소모 속도 (묶음/초)
+let useHist = [], useN = 0, useT = 0;
+const useRate = () => useHist.length ? useHist.reduce((a, b) => a + b, 0) / useHist.length : 0;
 const railCost = () => upc(1500 * Math.pow(1.75, S.railLv));
 const urgentCost = () => upc(6000 * Math.pow(2, S.urgentLv));
 const pickCost = () => upc(3000 * Math.pow(1.8, S.pickLv));
@@ -826,7 +830,7 @@ function complete(o, x, y, byHand, quiet){
     else batchDots += 1;
   }
   const pay = Math.round(orderPay(o) * (byHand ? 1 + comboBonus() : 1));
-  S.stock--; S.money += pay; S.earned += pay; S.shipped++;
+  S.stock--; useN++; S.money += pay; S.earned += pay; S.shipped++;
   S.today.shipped++; S.today.units = (S.today.units || 0) + (o.n || 1); S.today.revenue += pay;
   S.served += (o.n || 1);
   S.today.shipBonus = (S.today.shipBonus || 0) + Math.max(0, pay - pay / shipMult());   // 택배 단가 협상·택배사 계약으로 더 받은 돈
@@ -839,6 +843,7 @@ function complete(o, x, y, byHand, quiet){
   }
   return pay;
 }
+const INB_DELAY = 4, INB_AT = 0.5;   // 자동 입고: 재고 50% 이하면 주문, 4초 뒤 도착
 function buyStock(n){
   n = Math.min(n, S.cap - S.stock, Math.floor(S.money / unitCost()));
   if(n <= 0) return 0;
@@ -990,7 +995,18 @@ function update(dt){
   S.boosts.forEach(b => b.t -= dt); S.boosts = S.boosts.filter(b => b.t > 0);
   for(const k in S.cd) S.cd[k] = Math.max(0, S.cd[k] - dt);
   autoTimer += dt;
-  if(autoTimer > 1){ autoTimer = 0; if(S.autoIn && S.autoOn && S.stock <= S.cap * 0.35) buyStock(S.cap); }
+  // 🚚 자동 입고: 재고가 절반 아래로 내려가면 주문 → 트럭이 4초 뒤 도착 (그동안은 랙에 있는 재고로 버텨야 함 → 랙 크기가 중요)
+  useT += dt; if(useT >= 1){ useT = 0; useHist.push(useN); useN = 0; if(useHist.length > 10) useHist.shift(); }
+  if(S.inbT > 0){
+    S.inbT -= dt;
+    if(S.inbT <= 0){ const n = Math.min(S.inbN || 0, S.cap - S.stock); S.stock += Math.max(0, n); S.inbN = 0; S.inbT = 0; fx.inTruck = 2.2; if(fx.pallets.length < 3) fx.pallets.push({t:0}); }
+  }
+  if(autoTimer > 0.5){ autoTimer = 0;
+    if(S.autoIn && S.autoOn && !(S.inbT > 0) && S.stock <= S.cap * INB_AT){
+      const n = Math.min(S.cap - S.stock, Math.floor(S.money / unitCost()));
+      if(n > 0){ S.money -= n * unitCost(); S.today.stock += n * unitCost(); S.lastIn = n; S.inbN = n; S.inbT = INB_DELAY; }
+    }
+  }
   if(!S.event){
     S.nextEvent -= dt;
     if(S.nextEvent <= 0){
@@ -1457,7 +1473,7 @@ function drawInbound(){
   label(z, '📥 입하', S.autoIn ? false : sheetBadge('stock'));
 }
 function drawRack(){
-  cachedZone('rack', L.rack, [S.stock, S.cap, S.capLv, S.autoIn, sheetBadge('stock')].join(), drawRackRaw);
+  cachedZone('rack', L.rack, [S.stock, S.cap, S.capLv, S.autoIn, sheetBadge('stock'), S.inbT > 0 ? Math.ceil(S.inbT) + '/' + S.inbN : ''].join(), drawRackRaw);
 }
 function drawRackRaw(){
   const z = L.rack;
@@ -1488,7 +1504,7 @@ function drawRackRaw(){
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '800 11px Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif';
   const empty = S.stock <= 0;
   ctx.fillStyle = empty ? '#dc2626' : '#475569';
-  ctx.fillText(empty ? '재고 없음! 입고 필요' : `${S.stock} / ${S.cap}`, z.x + z.w / 2, z.y + z.h - 9);
+  ctx.fillText(empty ? (S.inbT > 0 ? `재고 없음! 🚚 ${Math.ceil(S.inbT)}초 뒤 도착` : '재고 없음! 입고 필요') : `${S.stock} / ${S.cap}${S.inbT > 0 ? ` · 🚚+${S.inbN}` : ''}`, z.x + z.w / 2, z.y + z.h - 9);
   label(z, '🗄️ 적치', S.autoIn ? sheetBadge('stock') : false, S.stock <= Math.max(2, S.cap * 0.15));
 }
 // ── 개미떼: 주문 하나 = 다리 달린 작은 컨테이너 하나 ──
@@ -2712,11 +2728,11 @@ ROWS.stock.push(
    ok:() => S.stock < S.cap && S.money >= unitCost(),
    act:() => buyStock(S.cap)},
   {color:'#3b82f6', up:true, title:() => `적치 랙 확장 Lv.${S.capLv}`,
-   desc:() => `최대 재고 ${S.cap} → ${S.cap + 90} · 임대료 ${fmt(rentOf())} → ${fmt(rentOf() + 3000)}/일`,
+   desc:() => `최대 재고 ${S.cap} → ${S.cap + capStep()} · 지금 처리 속도면 약 ${Math.max(1, Math.round(S.cap / Math.max(0.1, useRate())))}초 버팀 · 임대료 +${fmt(3000)}/일`,
    btn:() => fmt(capCost()), ok:() => S.money >= capCost(),
-   act:() => { S.money -= capCost(); S.capLv++; S.cap += 90; }},
+   act:() => { S.money -= capCost(); S.capLv++; S.cap += capStep(); }},
   {color:'#a78bfa', title:() => '자동 입고 시스템',
-   desc:() => S.autoIn ? `재고 35% 이하면 자동으로 채워요 (${S.autoOn ? '켜짐' : '꺼짐'})` : '재고가 떨어지면 지게차가 알아서 입고',
+   desc:() => S.autoIn ? `재고가 절반 아래면 주문 → 트럭이 ${INB_DELAY}초 뒤 도착 (${S.autoOn ? '켜짐' : '꺼짐'}) · 그동안 버틸 만큼 랙을 넓혀요` : '재고가 절반 아래로 내려가면 자동으로 주문 (트럭 4초)',
    btn:() => S.autoIn ? (S.autoOn ? '끄기' : '켜기') : fmt(10000),
    ok:() => S.autoIn || S.money >= 10000, alt:() => S.autoIn, up:() => !S.autoIn,
    once:true, act:() => { if(S.autoIn) S.autoOn = !S.autoOn; else { S.money -= 10000; S.autoIn = true; } }},
