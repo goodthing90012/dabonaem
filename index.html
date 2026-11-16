@@ -43,6 +43,14 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
 #ending p{font-size:13px;color:#52525b;margin:4px 0}
 #ending button{width:100%;margin-top:10px;border:0;border-radius:12px;padding:12px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer}
 #endContinue{background:#18181b;color:#fff}
+#gameover{position:fixed;inset:0;background:rgba(9,9,11,.78);display:flex;align-items:center;justify-content:center;z-index:12}
+#gameover .box{background:#fff;border-radius:20px;padding:22px 20px 16px;width:min(340px,92vw);text-align:center}
+#gameover h2{font-size:22px;margin-bottom:6px}
+#gameover .big{font-size:30px;font-weight:900;margin:8px 0}
+#gameover p{font-size:13px;color:#52525b;margin:4px 0;line-height:1.5}
+#gameover button{width:100%;margin-top:10px;border:0;border-radius:12px;padding:12px;font-size:14px;font-weight:800;font-family:inherit;cursor:pointer}
+#goRetry{background:#f59e0b;color:#fff}
+#goNew{background:#f4f4f5;color:#18181b}
 #endNew{background:#f4f4f5;color:#18181b}
 #banner{position:absolute;top:6px;left:50%;transform:translateX(-50%);max-width:calc(100% - 16px);padding:5px 12px;border-radius:12px;font-size:12px;font-weight:800;text-align:center;background:#fef3c7;color:#92400e;z-index:4;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.18);width:max-content;white-space:normal}
 #banner.live{background:#fee2e2;color:#991b1b}
@@ -141,6 +149,16 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
   <div class="grab"></div>
   <div id="sheetHead"><h3 id="sheetTitle"></h3><button id="sheetClose" aria-label="닫기">✕</button></div>
   <div id="rows"></div>
+</div>
+<div id="gameover" class="hidden">
+  <div class="box">
+    <h2 id="goTitle"></h2>
+    <p id="goReason"></p>
+    <div class="big" id="goDay"></div>
+    <p id="goStats"></p>
+    <button id="goRetry"></button>
+    <button id="goNew">처음부터 새로</button>
+  </div>
 </div>
 <div id="ending" class="hidden">
   <div class="box">
@@ -525,6 +543,47 @@ function doCutoff(h){
   if(late) fx.flash = 0.5;
 }
 // 🌙 18:00 정산: 고정비 차감, 모자라면 운영자금 대출
+// ═════ 게임 오버: 파산 · 고객 이탈 (경고 1번 → 다음 날도 그러면 끝, 그날 아침부터 재시작) ═════
+const MORNING_KEY = 'dabonaettung-morning';
+function saveMorning(){ try{ localStorage.setItem(MORNING_KEY, JSON.stringify(S)); }catch(e){} }
+function debtLimit(){
+  const h = S.revHist || [], avg = h.length ? h.reduce((a, b) => a + b, 0) / h.length : 0;
+  return Math.max(dailyCost() * 4, avg * 3);
+}
+const cancelRate = t => (t.shipped + t.cancelled) >= 20 ? t.cancelled / (t.shipped + t.cancelled) : 0;
+// 하루 끝에 판정: null(문제없음) · {warn:[...]} · {over:'debt'|'cancel'}
+function judgeDay(t){
+  const debtBad = S.debt > debtLimit(), cancelBad = cancelRate(t) >= 0.5;
+  const res = {warn:[]};
+  if(debtBad){ if(S.warnDebt) return {over:'debt'}; S.warnDebt = 1; res.warn.push('debt'); } else S.warnDebt = 0;
+  if(cancelBad){ if(S.warnCancel) return {over:'cancel'}; S.warnCancel = 1; res.warn.push('cancel'); } else S.warnCancel = 0;
+  return res;
+}
+function showGameOver(){
+  const why = S.over;
+  $('goTitle').textContent = why === 'debt' ? '💸 파산했어요' : '😡 고객이 떠났어요';
+  $('goReason').innerHTML = why === 'debt'
+    ? `빚이 이틀 연속 대출 한도를 넘었어요.<br>빚 ${fmt(S.debt)} · 한도 ${fmt(debtLimit())}`
+    : `이틀 연속 주문의 절반 넘게 취소됐어요.<br>오늘 취소 ${S.report ? S.report.cancelled : 0}건 · 출고 ${S.report ? S.report.shipped : 0}건`;
+  $('goDay').textContent = `D${S.day}에서 멈춤`;
+  $('goStats').innerHTML = `총 출고 ${S.shipped.toLocaleString('ko-KR')}건 · 인류의 ${(S.served / WORLD * 100).toPrecision(2)}%<br>플레이 ${fmtTime(S.playTime)}`;
+  $('goRetry').textContent = `☀️ D${S.day} 아침부터 다시`;
+  $('report').classList.add('hidden');
+  $('gameover').classList.remove('hidden');
+}
+function resetTransient(){
+  manual = 0; ants.clear(); crowds.clear(); leaving.length = 0; outflow.length = 0; batchCarry = 0; combo = 0;
+  fx.truck = {load:0, state:'idle', t:0}; drag = null;
+}
+function retryMorning(){
+  let m = null; try{ m = JSON.parse(localStorage.getItem(MORNING_KEY)); }catch(e){}
+  if(!m || !m.ch){ S = fresh(); } else { S = m; S.over = null; S.night = false; S.report = null; }
+  // 같은 경고 상태로 다시 시작하면 바로 또 끝나니, 재도전 땐 경고를 한 번 더 줌
+  S.warnDebt = 0; S.warnCancel = 0;
+  resetTransient(); save(); saveMorning();
+  $('gameover').classList.add('hidden'); closeSheet();
+  say(`☀️ D${S.day} 아침부터 다시! 이번엔 버텨봐요`, '#d97706', 2.5);
+}
 function endDay(){
   const t = S.today, wages = wageOf() * S.workers, rent = rentOf(), maint = maintOf(), interest = interestOf(), ads = adCost();
   const fixed = wages + rent + maint + interest + ads;
@@ -533,8 +592,13 @@ function endDay(){
   if(S.money < 0){ loan = -S.money; S.debt += loan; S.money = 0; }
   S.report = Object.assign({day:S.day, ads, rating:S.rating, wages, workers:S.workers, rent, maint, interest, loan, debt:S.debt,
     net:t.revenue - t.stock - t.penalty - t.mkt - fixed}, t);
+  S.revHist = (S.revHist || []).concat([t.revenue]).slice(-3);
+  const j = judgeDay(t);
+  S.report.warn = j.warn || []; S.report.limit = debtLimit(); S.report.crate = cancelRate(t);
   S.night = true; drag = null;
-  closeSheet(); save(); showReport();
+  closeSheet();
+  if(j.over){ S.over = j.over; save(); showGameOver(); return; }
+  save(); showReport();
 }
 function showReport(){
   const r = S.report; if(!r) return;
@@ -557,7 +621,9 @@ function showReport(){
   </table>
   ${r.loan ? `<p class="note" style="color:#dc2626">⚠️ 고정비가 모자라 운영자금 ${fmt(r.loan)}을 대출했어요.</p>` : ''}
   ${S.debt ? `<p class="note">대출 잔액 ${fmt(S.debt)} · 내일 이자 ${fmt(interestOf())}</p>` : ''}
-  <p class="note">내일 고정비 예상: ${fmt(dailyCost())}</p>`;
+  <p class="note">내일 고정비 예상: ${fmt(dailyCost())} · 대출 한도 ${fmt(r.limit || debtLimit())}</p>
+  ${(r.warn || []).includes('debt') ? `<p class="note" style="color:#dc2626;font-weight:800">🚨 파산 경고! 빚이 대출 한도를 넘었어요. 내일 정산 때도 넘으면 파산이에요.</p>` : ''}
+  ${(r.warn || []).includes('cancel') ? `<p class="note" style="color:#dc2626;font-weight:800">🚨 고객 이탈 경고! 오늘 주문의 ${Math.round((r.crate || 0) * 100)}%가 취소됐어요. 내일도 절반 넘게 취소되면 끝이에요.</p>` : ''}`;
   repayLabel();
   $('report').classList.remove('hidden');
 }
@@ -576,6 +642,7 @@ function repay(){
 function nextDay(){
   S.day++; S.dayT = 0; S.cutIdx = 0; S.night = false; S.today = freshToday(); S.report = null;
   $('report').classList.add('hidden');
+  saveMorning();
   say(`☀️ D${S.day} 출근! 오늘 고정비 ${fmt(dailyCost())}`, '#d97706', 2.2);
   save();
 }
@@ -2547,6 +2614,10 @@ function refresh(){
     const h = CUTOFFS[S.cutIdx], sec = (h * 60 - gameMin()) / 540 * DAY_SEC;
     if(sec <= 35) parts.push(`⏰ ${h}:00 ${h === 18 ? '마지막 ' : ''}집하 마감 ${Math.ceil(sec)}초 · 미출고 ${S.orders.length}건`);
   }
+  if(!S.night){
+    if(S.warnDebt) parts.push(S.debt > debtLimit() ? `🚨 빚이 한도 초과 — 오늘 정산 전까지 ${fmt(S.debt - debtLimit())} 갚아야 해요` : '✅ 빚이 한도 안으로 들어왔어요');
+    if(S.warnCancel){ const t = S.today, n = t.shipped + t.cancelled; parts.push(`🚨 고객 이탈 경고 · 오늘 취소율 ${n ? Math.round(t.cancelled / n * 100) : 0}%`); }
+  }
   if(parts.length){
     bn.classList.remove('hidden'); bn.classList.add('live');
     setText(bn, parts.join('  ·  ') + (S.event && S.event.phase === 'live' ? `  ·  ${EVENTS[S.event.i].icon} ×${EVENTS[S.event.i].mult}` : ''));
@@ -2585,7 +2656,7 @@ document.addEventListener('pointerdown', e => {
 }, true);
 $('resetBtn').onclick = () => {
   if(!resetArm){ resetArm = true; $('resetBtn').textContent = '정말요? 한 번 더 누르면 초기화'; return; }
-  S = fresh(); manual = 0; ants.clear(); crowds.clear(); leaving.length = 0; outflow.length = 0; batchCarry = 0; $('report').classList.add('hidden'); fx.truck = {load:0, state:'idle', t:0}; save(); $('menu').classList.add('hidden'); closeSheet();
+  S = fresh(); manual = 0; ants.clear(); crowds.clear(); leaving.length = 0; outflow.length = 0; batchCarry = 0; $('report').classList.add('hidden'); fx.truck = {load:0, state:'idle', t:0}; save(); saveMorning(); $('menu').classList.add('hidden'); closeSheet();
 };
 
 // ═════ 메인 루프 ═════
@@ -2608,10 +2679,13 @@ window.addEventListener('pagehide', save);
 $('repayBtn').onclick = repay;
 $('menuRepay').onclick = repay;
 $('nextDay').onclick = nextDay;
+$('goRetry').onclick = retryMorning;
+$('goNew').onclick = () => { S = fresh(); resetTransient(); save(); saveMorning(); $('gameover').classList.add('hidden'); closeSheet(); };
 $('endContinue').onclick = () => $('ending').classList.add('hidden');
-$('endNew').onclick = () => { S = fresh(); manual = 0; ants.clear(); crowds.clear(); leaving.length = 0; outflow.length = 0; batchCarry = 0; combo = 0; fx.truck = {load:0, state:'idle', t:0}; save(); $('ending').classList.add('hidden'); closeSheet(); };
+$('endNew').onclick = () => { S = fresh(); manual = 0; ants.clear(); crowds.clear(); leaving.length = 0; outflow.length = 0; batchCarry = 0; combo = 0; fx.truck = {load:0, state:'idle', t:0}; save(); saveMorning(); $('ending').classList.add('hidden'); closeSheet(); };
 resize(); refresh(); requestAnimationFrame(loop);
-if(S.night) showReport();
+try{ if(!localStorage.getItem(MORNING_KEY)) saveMorning(); }catch(e){}
+if(S.over) showGameOver(); else if(S.night) showReport();
 
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   navigator.serviceWorker.register('sw.js').catch(() => {});
