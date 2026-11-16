@@ -57,8 +57,8 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
 @keyframes pulse{to{background:#fecaca}}
 .hidden{display:none!important}
 #stage{position:relative;flex:1;min-height:0}
-#cv,#bgcv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
-#bgcv{pointer-events:none}
+#cv,#bgcv,#pilecv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
+#bgcv,#pilecv{pointer-events:none}
 #sheet{position:fixed;left:0;right:0;bottom:0;max-height:56dvh;display:flex;flex-direction:column;background:#fff;
   border-radius:20px 20px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.15);z-index:5;padding-bottom:env(safe-area-inset-bottom);
   transform:translateY(calc(100% + 40px));transition:transform .22s ease}
@@ -143,7 +143,7 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
     <button id="menuBtn" aria-label="메뉴">⚙︎</button>
   </header>
   <div id="goal"><div id="goalText"></div><div class="gbar"><i id="goalFill"></i></div></div>
-  <div id="stage"><canvas id="bgcv"></canvas><canvas id="cv"></canvas><div id="banner" class="hidden"></div></div>
+  <div id="stage"><canvas id="bgcv"></canvas><canvas id="pilecv"></canvas><canvas id="cv"></canvas><div id="banner" class="hidden"></div></div>
 </div>
 <div id="sheet">
   <div class="grab"></div>
@@ -1204,6 +1204,19 @@ function forklift(x, yb, s, carry, dir = 1){
   ctx.restore();
 }
 function label(z, text, badge, warn){
+  const key = 'lab' + text + (badge ? 1 : 0) + (warn ? 1 : 0);
+  // 글자가 자주 바뀌는 라벨(피킹 건수 등)은 그냥 그리고, 그대로인 라벨만 그림으로 굳혀서 찍음
+  if(z._lk !== key){ z._lk = key; z._ln = 0; }
+  if(++z._ln < 30){ labelRaw(z, text, badge, warn); return; }
+  let sp = spriteCache.get(key);
+  if(!sp){ ctx.font = '800 12px Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif'; }
+  const tw = sp ? sp.tw : ctx.measureText(text).width;
+  sp = sprite(key, tw + 18 + 12, 34, 0, 9, (x0, y0) => { labelRaw({x:x0 - 8, y:y0 - 7}, text, badge, warn); });
+  sp.tw = tw;
+  stamp(sp, z.x + 8, z.y + 7);
+  z.lab = {x:z.x + 8, y:z.y + 7, w:tw + 18, h:22};
+}
+function labelRaw(z, text, badge, warn){
   ctx.font = '800 12px Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   const w = ctx.measureText(text).width + 18, x = z.x + 8, y = z.y + 7, h = 22;
   rr(x, y + 2, w, h, 11); ctx.fillStyle = 'rgba(15,23,42,.08)'; ctx.fill();
@@ -1242,6 +1255,23 @@ function drawChannels(){
   const sig = CH.map(c => S.ch[c.id].lv + (evMult(c.id) > 1 ? 'f' : '')).join() + '|' + S.pend.length + '|' + S.pend.map(e => e.ch).join() + '|' + Math.ceil(S.waveT) + '|' + sheetBadge('channel') + landscape + S.st;
   cachedZone('channels', L.channels, sig, drawChannelsRaw);
 }
+function drawShop(c, on, fire, cx0, cy0, sz){
+  const x = cx0 - sz / 2, y = cy0 - sz / 2;
+  ctx.lineWidth = 1.5; ctx.strokeStyle = OUT;
+  rr(x, y + sz * 0.12, sz, sz * 0.88, sz * 0.18); ctx.fillStyle = on ? '#fff' : '#e4e4e7'; ctx.fill(); ctx.stroke();
+  const col = on ? c.color : '#a1a1aa', sc = 4, sw = sz / sc;
+  for(let k = 0; k < sc; k++){
+    ctx.beginPath(); ctx.moveTo(x + k * sw, y + sz * 0.1);
+    ctx.lineTo(x + (k + 1) * sw, y + sz * 0.1); ctx.lineTo(x + (k + 1) * sw, y + sz * 0.3);
+    ctx.arc(x + (k + 0.5) * sw, y + sz * 0.3, sw / 2, 0, Math.PI); ctx.closePath();
+    ctx.fillStyle = k % 2 ? '#fff' : col; ctx.fill(); ctx.stroke();
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = on ? shade(c.color, -0.35) : '#71717a';
+  ctx.font = `800 ${Math.max(8, Math.round(sz * 0.24))}px Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif`;
+  ctx.fillText(on ? c.short : '🔒', cx0, y + sz * 0.7);
+  if(fire){ ctx.font = `${Math.round(sz * 0.4)}px Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif`; ctx.fillText('🔥', x + sz * 0.95, y + sz * 0.05); }
+}
 function drawChannelsRaw(){
   const z = L.channels;
   // 연동한 채널 + 다음에 열 수 있는 채널 2개만 표시
@@ -1267,6 +1297,13 @@ function drawChannelsRaw(){
     const p = pos(i), on = S.ch[c.id].lv > 0, pl = fx.chPulse[c.id] || 0;
     chPos[c.id] = p;
     const sz = s * (1 + pl * 0.15), x = p.x - sz / 2, y = p.y - sz / 2;
+    { // 가게 그림은 한 번 그려두고 찍음 (톡 튀는 효과는 크기만 키워서)
+      const fire = on && evMult(c.id) > 1, sq = Math.round(s);
+      const sp = sprite('shop' + c.id + on + fire + sq, sq * 1.35, sq * 1.35, sq * 0.6, sq * 0.7, (x0, y0) => drawShop(c, on, fire, x0, y0, sq));
+      const k = sz / sq;
+      ctx.drawImage(sp.cv, p.x - sp.ox * k, p.y - sp.oy * k, sp.w * k, sp.h * k);
+    }
+    if(false){
     ctx.lineWidth = 1.5; ctx.strokeStyle = OUT;
     rr(x, y + sz * 0.12, sz, sz * 0.88, sz * 0.18); ctx.fillStyle = on ? '#fff' : '#e4e4e7'; ctx.fill(); ctx.stroke();
     // 차양 (가게 지붕)
@@ -1282,6 +1319,7 @@ function drawChannelsRaw(){
     ctx.font = `800 ${Math.max(8, Math.round(sz * 0.24))}px Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif`;
     ctx.fillText(on ? c.short : '🔒', p.x, y + sz * 0.7);
     if(on && evMult(c.id) > 1){ ctx.font = `${Math.round(sz * 0.4)}px Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif`; ctx.fillText('🔥', x + sz * 0.95, y + sz * 0.05); }
+    }
     // 수집 대기 중인 주문 수 말풍선 (차오를수록 커짐)
     const pc = pendCnt[c.id] || 0;
     if(pc){
@@ -1376,14 +1414,14 @@ function spawnPt(){
   const pk = L.pick, pz = L.pack, r = Math.random(), lane = R * 0.9;
   // 55% 위쪽 존들(피킹 쪽) · 30% 좌우 가장자리 · 15% 출구 쪽 가장자리(출구 레인만 피해서)
   if(landscape){
-    if(r < 0.55) return {x:pz.x + 4 + Math.random() * R * 0.8, y:pk.y + 10 + Math.random() * (pk.h - 20)};
+    if(r < 0.55) return {x:pz.x + R * 0.6 + Math.random() * R * 0.6, y:Math.max(pz.y + R, pk.y + 10 + Math.random() * (pk.h - 20))};   // 피킹존 옆에서만 (적치존 쪽 X)
     if(r < 0.85){ const top = Math.random() < 0.5; return {x:pz.x + 20 + Math.random() * (pz.w - 40), y:top ? pz.y + 30 + Math.random() * 8 : pz.y + pz.h - 4 - Math.random() * 8}; }
     const E = exitPoint(); let y; do { y = pz.y + 30 + Math.random() * (pz.h - 40); } while(Math.abs(y - E.y) < lane);
     return {x:pz.x + pz.w - 4 - Math.random() * 8, y};
   }
   if(r < 0.55){
-    const x0 = L.inbound.x, x1 = pk.x + pk.w;
-    return {x:x0 + 6 + Math.random() * (x1 - x0 - 12), y:pz.y + 4 + Math.random() * R * 0.6};
+    // 피킹존 바로 아래에서만 나옴 (입하·적치존 밑에서는 안 나오게) + 존 테두리에 겹치지 않게 조금 아래로
+    return {x:pk.x + 10 + Math.random() * (pk.w - 20), y:pz.y + R * 0.55 + Math.random() * R * 0.5};
   }
   if(r < 0.85){ const left = Math.random() < 0.5; return {x:left ? pz.x + 4 + Math.random() * 8 : pz.x + pz.w - 4 - Math.random() * 8, y:pz.y + 30 + Math.random() * (pz.h - 40)}; }
   const E = exitPoint(); let x; do { x = pz.x + 10 + Math.random() * (pz.w - 20); } while(Math.abs(x - E.x) < lane);
@@ -1797,18 +1835,19 @@ function toteSprite(col, s, mood, shad){
   }
   return sp;
 }
-let pileCv = null, pileSig = -1;
+// 자리 잡은 상자 더미는 뒤쪽 캔버스(#pilecv)에 바뀔 때만 다시 그림 → 매 프레임 합성 비용 없음
+let pileSig = -1;
 function drawPile(list, sig){
-  if(!list.length){ pileSig = -1; return; }
-  if(!pileCv || pileCv.width !== cv.width || pileCv.height !== cv.height){ pileCv = document.createElement('canvas'); pileCv.width = cv.width; pileCv.height = cv.height; pileSig = -1; }
+  const pc = $('pilecv');
+  if(pc.width !== cv.width || pc.height !== cv.height){ pc.width = cv.width; pc.height = cv.height; pileSig = -2; }
+  if(!list.length){ if(pileSig !== -1){ pc.getContext('2d').clearRect(0, 0, pc.width, pc.height); pileSig = -1; } return; }
   if(sig !== pileSig){
     pileSig = sig;
-    const g = pileCv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, pileCv.width, pileCv.height); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const g = pc.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, pc.width, pc.height); g.setTransform(dpr, 0, 0, dpr, 0, 0);
     list.sort((p, q) => (p[0].y + p[0].l * 0.01) - (q[0].y + q[0].l * 0.01));
     const saved = ctx; ctx = g;
     try{ for(const [a, o] of list) drawAnt(a, o, false); } finally { ctx = saved; }
   }
-  ctx.drawImage(pileCv, 0, 0, W, H);
 }
 function drawAnt(a, o, isTarget){
   const s = R * 0.3 * kIn * (o.size > 1 ? 1.4 : 1), tiny = s < 11;
@@ -2454,13 +2493,13 @@ window.addEventListener('blur', () => { drag = null; tap = null; });
 document.addEventListener('visibilitychange', () => { if(document.hidden){ drag = null; tap = null; } });
 
 // 프레임이 계속 밀리면 화질(해상도)을 한 단계씩 낮춰서 부드럽게
-let dprCap = 2, perfT = 0, perfN = 0, perfSlow = 0;
+let dprCap = matchMedia('(pointer: coarse)').matches ? 1.75 : 2, perfT = 0, perfN = 0, perfSlow = 0;
 function perfWatch(dt){
   if(document.hidden) return;
   perfT += dt; perfN++;
-  if(perfT < 2) return;
+  if(perfT < 1.5) return;
   const fps = perfN / perfT; perfT = 0; perfN = 0;
-  if(fps < 45){ if(++perfSlow >= 2 && dprCap > 1){ dprCap = Math.max(1, Math.min(dprCap, window.devicePixelRatio || 1) - 0.25); perfSlow = 0; resize(); } }
+  if(fps < 50){ if(++perfSlow >= 2 && dprCap > 1){ dprCap = Math.max(1, Math.min(dprCap, window.devicePixelRatio || 1) - 0.25); perfSlow = 0; resize(); } }
   else perfSlow = 0;
 }
 function resize(){
