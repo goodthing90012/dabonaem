@@ -552,18 +552,22 @@ function debtLimit(){
 }
 const cancelRate = t => (t.shipped + t.cancelled) >= 20 ? t.cancelled / (t.shipped + t.cancelled) : 0;
 // 하루 끝에 판정: null(문제없음) · {warn:[...]} · {over:'debt'|'cancel'}
+// 미출고: 마감 때 남은 주문이 30묶음 이상이면서 오늘 출고한 것보다 많으면
+const shipBad = () => S.orders.length >= 30 && S.orders.length > S.today.shipped;
 function judgeDay(t){
   const debtBad = S.debt > debtLimit(), cancelBad = cancelRate(t) >= 0.5;
   const res = {warn:[]};
   if(debtBad){ if(S.warnDebt) return {over:'debt'}; S.warnDebt = 1; res.warn.push('debt'); } else S.warnDebt = 0;
   if(cancelBad){ if(S.warnCancel) return {over:'cancel'}; S.warnCancel = 1; res.warn.push('cancel'); } else S.warnCancel = 0;
+  if(shipBad()){ if(S.warnShip) return {over:'ship'}; S.warnShip = 1; res.warn.push('ship'); } else S.warnShip = 0;
   return res;
 }
 function showGameOver(){
   const why = S.over;
-  $('goTitle').textContent = why === 'debt' ? '💸 파산했어요' : '😡 고객이 떠났어요';
+  $('goTitle').textContent = why === 'debt' ? '💸 파산했어요' : why === 'ship' ? '📦 출고가 밀려 멈췄어요' : '😡 고객이 떠났어요';
   $('goReason').innerHTML = why === 'debt'
     ? `빚이 이틀 연속 대출 한도를 넘었어요.<br>빚 ${fmt(S.debt)} · 한도 ${fmt(debtLimit())}`
+    : why === 'ship' ? `이틀 연속 마감 때 미출고가 출고보다 많았어요.<br>미출고 ${S.report ? S.report.unship : S.orders.length}묶음 · 오늘 출고 ${S.report ? S.report.shipped : 0}묶음`
     : `이틀 연속 주문의 절반 넘게 취소됐어요.<br>오늘 취소 ${S.report ? S.report.cancelled : 0}건 · 출고 ${S.report ? S.report.shipped : 0}건`;
   $('goDay').textContent = `D${S.day}에서 멈춤`;
   $('goStats').innerHTML = `총 출고 ${S.shipped.toLocaleString('ko-KR')}건 · 인류의 ${(S.served / WORLD * 100).toPrecision(2)}%<br>플레이 ${fmtTime(S.playTime)}`;
@@ -579,7 +583,7 @@ function retryMorning(){
   let m = null; try{ m = JSON.parse(localStorage.getItem(MORNING_KEY)); }catch(e){}
   if(!m || !m.ch){ S = fresh(); } else { S = m; S.over = null; S.night = false; S.report = null; }
   // 같은 경고 상태로 다시 시작하면 바로 또 끝나니, 재도전 땐 경고를 한 번 더 줌
-  S.warnDebt = 0; S.warnCancel = 0;
+  S.warnDebt = 0; S.warnCancel = 0; S.warnShip = 0;
   resetTransient(); save(); saveMorning();
   $('gameover').classList.add('hidden'); closeSheet();
   say(`☀️ D${S.day} 아침부터 다시! 이번엔 버텨봐요`, '#d97706', 2.5);
@@ -594,7 +598,7 @@ function endDay(){
     net:t.revenue - t.stock - t.penalty - t.mkt - fixed}, t);
   S.revHist = (S.revHist || []).concat([t.revenue]).slice(-3);
   const j = judgeDay(t);
-  S.report.warn = j.warn || []; S.report.limit = debtLimit(); S.report.crate = cancelRate(t);
+  S.report.warn = j.warn || []; S.report.limit = debtLimit(); S.report.crate = cancelRate(t); S.report.unship = S.orders.length;
   S.night = true; drag = null;
   closeSheet();
   if(j.over){ S.over = j.over; save(); showGameOver(); return; }
@@ -623,6 +627,7 @@ function showReport(){
   ${S.debt ? `<p class="note">대출 잔액 ${fmt(S.debt)} · 내일 이자 ${fmt(interestOf())}</p>` : ''}
   <p class="note">내일 고정비 예상: ${fmt(dailyCost())} · 대출 한도 ${fmt(r.limit || debtLimit())}</p>
   ${(r.warn || []).includes('debt') ? `<p class="note" style="color:#dc2626;font-weight:800">🚨 파산 경고! 빚이 대출 한도를 넘었어요. 내일 정산 때도 넘으면 파산이에요.</p>` : ''}
+  ${(r.warn || []).includes('ship') ? `<p class="note" style="color:#dc2626;font-weight:800">🚨 미출고 경고! 마감 때 ${r.unship}묶음이 못 나갔어요 (오늘 출고 ${r.shipped}). 내일도 미출고가 출고보다 많으면 끝이에요.</p>` : ''}
   ${(r.warn || []).includes('cancel') ? `<p class="note" style="color:#dc2626;font-weight:800">🚨 고객 이탈 경고! 오늘 주문의 ${Math.round((r.crate || 0) * 100)}%가 취소됐어요. 내일도 절반 넘게 취소되면 끝이에요.</p>` : ''}`;
   repayLabel();
   $('report').classList.remove('hidden');
@@ -2616,6 +2621,7 @@ function refresh(){
   }
   if(!S.night){
     if(S.warnDebt) parts.push(S.debt > debtLimit() ? `🚨 빚이 한도 초과 — 오늘 정산 전까지 ${fmt(S.debt - debtLimit())} 갚아야 해요` : '✅ 빚이 한도 안으로 들어왔어요');
+    if(S.warnShip) parts.push(`🚨 미출고 경고 · 지금 ${S.orders.length}묶음 대기 / 오늘 출고 ${S.today.shipped}`);
     if(S.warnCancel){ const t = S.today, n = t.shipped + t.cancelled; parts.push(`🚨 고객 이탈 경고 · 오늘 취소율 ${n ? Math.round(t.cancelled / n * 100) : 0}%`); }
   }
   if(parts.length){
