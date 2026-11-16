@@ -1540,17 +1540,16 @@ function updateDots(dt){
         const src2 = keep ? (j % keep) : -1;
         if(src2 >= 0){ c.xs[j] = c.xs[src2] + (Math.random() - 0.5) * 6; c.ys[j] = c.ys[src2] + (Math.random() - 0.5) * 4; c.ls[j] = c.ls[src2]; }
         else if(a){ c.xs[j] = a.x + (Math.random() - 0.5) * 6; c.ys[j] = a.y + (Math.random() - 0.5) * 4; }
-        else { if(!c.sp) c.sp = spawnPt(); c.xs[j] = c.sp.x + (Math.random() - 0.5) * 10; c.ys[j] = c.sp.y + (Math.random() - 0.5) * 6; }   // 한 주문은 한 지점에서 무리로 출발
+        else { const sp = spawnPt(); c.xs[j] = sp.x; c.ys[j] = sp.y; }   // 점마다 제각각 다른 곳에서 출발 (뭉치지 않고 흩어져서 옴)
       }
       crowds.set(o.id, c);
     }
     // 무리 이동: 무리 중심까지 거리로 한 번만 속도를 정하고, 모든 상자가 같은 비율로 움직임 (꼬물거림 없음)
-    let mx = 0, my = 0;
-    for(let j = 0; j < k; j++){ const s = dotSlots[d + j]; mx += s.x - c.xs[j]; my += s.y - c.ys[j]; }
-    const md = Math.hypot(mx / k, my / k), f = md > 0.5 ? Math.min(1, sp / md) : 1;
+    // 점마다 따로 곧장 자기 자리로 (흩어져서 출발한 점들이 각자 걸어옴)
     for(let j = 0; j < k; j++, d++){
-      const s = dotSlots[d];
-      c.xs[j] += (s.x - c.xs[j]) * f; c.ys[j] += (s.y - c.ys[j]) * f;
+      const s = dotSlots[d], dx = s.x - c.xs[j], dy = s.y - c.ys[j], dd = Math.hypot(dx, dy);
+      const f = dd > 0.5 ? Math.min(1, sp * (0.85 + (j % 7) * 0.05) / dd) : 1;
+      c.xs[j] += dx * f; c.ys[j] += dy * f;
       c.ls[j] += (s.l - c.ls[j]) * kl;
       const ty = c.ys[j] - c.ls[j] * R * DOT_LIFT; if(ty < top) top = ty;
     }
