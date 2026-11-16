@@ -1441,7 +1441,7 @@ let slots = [], antSpawn = {x:0, y:0};
 // 흩뿌리기: 자기 자리 바로 위에서 톡 떨어지듯 들어옴 (긴 줄·빛살 무늬 없이)
 function edgeFrom(x, y){
   const z = L.pack;
-  return {x:x + (Math.random() - 0.5) * R * 0.5, y:Math.max(z.y + 8, y - R * (0.8 + Math.random() * 1.2))};
+  return {x:Math.max(z.x + 6, Math.min(z.x + z.w - 6, x + (Math.random() - 0.5) * R * 0.5)), y:Math.max(z.y + 8, y - R * (0.8 + Math.random() * 1.2))};   // 패킹존 밖으로는 안 나감
 }
 function spawnPt(){
   // 사방에서 몰려옴: 40%는 피킹존 쪽, 나머지는 패킹존 가장자리 아무 데서나 (출구 레인 쪽만 피해서)
