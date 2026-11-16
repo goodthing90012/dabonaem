@@ -128,12 +128,16 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
 .row button{background:linear-gradient(#4f8ef7,#3b82f6);border-radius:14px}
 .row button.alt{background:linear-gradient(#9b74f7,#8b5cf6)}
 .row button:disabled{background:#ececef}
+.stat.money .mcol{display:flex;flex-direction:column;line-height:1.05}
+.stat.money .mrow{display:flex;align-items:baseline;gap:2px}
+#moneyStat .mrow small{font-size:9.5px}
+#earned{font-style:normal;font-size:9.5px;font-weight:700;color:#15803d;opacity:.85;white-space:nowrap}
 </style>
 </head>
 <body>
 <div id="app">
   <header id="hud">
-    <div class="stat money" id="moneyStat">💰<b id="money">0</b><small id="debt"></small></div>
+    <div class="stat money" id="moneyStat">💰<span class="mcol"><b id="money">0</b><span class="mrow"><em id="earned"></em><small id="debt"></small></span></span></div>
     <div class="stat" id="stockStat">📦<b id="stock">0</b></div>
     <div class="stat" id="clockStat">🕘<b id="clock">D1 09:00</b></div>
     <div id="boostBar"></div>
@@ -2737,6 +2741,7 @@ function refresh(){
     el.b.classList.toggle('alt', !!(el.def.alt && el.def.alt()));
   }
   setText($('money'), fmt(S.money));
+  setText($('earned'), '누적 ' + fmt(S.earned || 0));
   setText($('stock'), `${S.stock}/${S.cap}`);
   $('stockStat').classList.toggle('warn', S.stock <= Math.max(2, S.cap * 0.15));
   setText($('clock'), `D${S.day} ${clockStr()}`);
@@ -2764,7 +2769,7 @@ function refresh(){
     const gt = $('goalText'); if(gt._h !== g){ gt.innerHTML = g; gt._h = g; }
     $('goalFill').style.width = (k * 100).toFixed(1) + '%';
   }
-  setText($('debt'), S.debt > 0 ? ' 빚' + fmt(S.debt).slice(1) : '');
+  setText($('debt'), S.debt > 0 ? ' · 빚 ' + fmtN(S.debt) : '');
   $('moneyStat').classList.toggle('indebt', S.debt > 0);
   const bh = S.boosts.map(b => `<span>${BOOSTS[b.k].icon} ${Math.ceil(b.t)}s</span>`).join('');
   const bb = $('boostBar'); if(bb._h !== bh){ bb.innerHTML = bh; bb._h = bh; }
