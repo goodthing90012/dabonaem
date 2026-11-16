@@ -1,4 +1,4 @@
-const CACHE = 'dabonaettung-v72';
+const CACHE = 'dabonaettung-v73';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

@@ -346,8 +346,10 @@ const rushCost = () => r100(Math.max(3000 * curN(), perMinute() * 0.6));
 const perRev = () => perRevBase() * RAILS[railTier()].mult * lines() * (rushT > 0 ? RUSH_MULT : 1) * (fever() ? FEVER_MULT : 1);
 const needRad = () => TAU / perRev();
 // 자동 회전 모터 (아시아 단계~): 손을 뗐을 때 최대 속도의 20/25/30%로 혼자 돎
-const AUTO_ROT = [0, 0.05, 0.08, 0.12];   // 손 뗐을 때 최대 속도의 5/8/12% (손으로 돌리는 게 훨씬 빠르게)
-const autoRotPct = () => AUTO_ROT[Math.min(3, S.autoRotLv || 0)];
+const AUTO_ROT = [0, 0.05, 0.08, 0.12, 0.16, 0.2];   // 손 뗐을 때 최대 속도의 5~20% (손으로 돌리는 게 훨씬 빠르게)
+const AR_ST = 1;                                          // 🏙️ 서울 단계부터 살 수 있음 (Lv.4~5는 아시아부터)
+const arMax = () => S.st >= 3 ? 5 : 3;
+const autoRotPct = () => AUTO_ROT[Math.min(5, S.autoRotLv || 0)];
 const autoRotCost = () => r100(5000 * Math.pow(4, S.autoRotLv || 0) * curN());
 // 관성(베어링): 손을 떼면 이 시간상수로 서서히 감속 — 레일 모터 레벨·새 레일로 길어짐
 const inertiaTau = () => 0.35 + 0.08 * S.railLv + 0.25 * railTier();
@@ -2592,12 +2594,14 @@ ROWS.pack.push(
      (Math.floor((S.autoLv + 1) / 4) > Math.floor(S.autoLv / 4) && S.autoLv + 1 < AUTO_NAMES.length * 4 ? ` · 다음: ${autoName(S.autoLv + 1)} 도입` : ''),
    btn:() => fmt(autoCost()), ok:() => S.money >= autoCost(),
    act:() => { S.money -= autoCost(); S.autoLv++; }},
-  {color:'#7c3aed', up:() => S.st >= 3 && (S.autoRotLv || 0) < 3, title:() => `🔄 자동 회전 모터 Lv.${S.autoRotLv || 0}`,
-   desc:() => S.st < 3 ? '🌏 아시아 단계에서 열려요 — 손을 떼도 레일이 천천히 돌아요' :
-     (S.autoRotLv || 0) >= 3 ? `최대 · 손을 떼면 최대 속도의 ${Math.round(autoRotPct() * 100)}%로 혼자 돌아요` :
-     `손을 떼면 최대 속도의 ${Math.round(autoRotPct() * 100)}% → ${Math.round(AUTO_ROT[Math.min(3, (S.autoRotLv || 0) + 1)] * 100)}%로 혼자 돌아요 (콤보는 안 쌓여요)`,
-   btn:() => S.st < 3 ? '🔒' : (S.autoRotLv || 0) >= 3 ? 'MAX' : fmt(autoRotCost()),
-   ok:() => S.st >= 3 && (S.autoRotLv || 0) < 3 && S.money >= autoRotCost(),
+  {color:'#7c3aed', up:() => S.st >= AR_ST && (S.autoRotLv || 0) < arMax(), title:() => `🔄 자동 회전 모터 Lv.${S.autoRotLv || 0}`,
+   desc:() => { const lv = S.autoRotLv || 0;
+     if(S.st < AR_ST) return '🏙️ 서울 단계에서 열려요 — 손을 떼도 레일이 천천히 돌아요';
+     if(lv >= 5) return `최대 · 손을 떼면 최대 속도의 ${Math.round(autoRotPct() * 100)}%로 혼자 돌아요`;
+     if(lv >= arMax()) return `손을 떼면 최대 속도의 ${Math.round(autoRotPct() * 100)}%로 혼자 돌아요 · Lv.4부터는 🌏 아시아 단계에서`;
+     return `손을 떼면 최대 속도의 ${Math.round(autoRotPct() * 100)}% → ${Math.round(AUTO_ROT[lv + 1] * 100)}%로 혼자 돌아요 (콤보는 안 쌓여요)`; },
+   btn:() => { const lv = S.autoRotLv || 0; return S.st < AR_ST || (lv >= arMax() && lv < 5) ? '🔒' : lv >= 5 ? 'MAX' : fmt(autoRotCost()); },
+   ok:() => S.st >= AR_ST && (S.autoRotLv || 0) < arMax() && S.money >= autoRotCost(),
    act:() => { S.money -= autoRotCost(); S.autoRotLv = (S.autoRotLv || 0) + 1; }},
   {color:'#0f172a', up:() => { const nx = RAILS[railTier() + 1]; return !!nx && nx.st <= S.st; },
    title:() => { const nx = RAILS[railTier() + 1]; return nx ? `🚝 새 레일: ${nx.name}` : `🚝 ${RAILS[railTier()].name} (최고 레일)`; },
