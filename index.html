@@ -203,11 +203,11 @@ const STAGES = [
   {name:'전 인류',   icon:'🌍', goal:WORLD},
 ];
 const AUTO_BASE = 3000, AUTO_G = 6, AUTO_M = 1.25, STAGE_BOOST = 3; // 봇 시뮬레이션 튜닝: 잘하면 ~55분, 보통 ~60분, 자동화를 덜 사도 ~113분
-const CH_N = 1.18, TIER_N = 1.3, PRICE_M = 1.6, IN_M = 1.5;   // IN_M: 모든 채널 주문 유입 ×1.5
+const CH_N = 1.18, TIER_N = 1.3, PRICE_M = 2, IN_M = 3, N_M = 0.5;   // 단가 ×2 · 주문은 3배로 몰려오고 1묶음 크기는 절반 (진행 속도는 비슷, 처리할 건 2배)
     // 채널 연동·새 레일도 물량 단위를 키움 · 단가 +60%
 const AUTO_NAMES = ['포장 작업대', '핸드 스캐너', '컨베이어', '자동 포장기', '소터', 'AGV 로봇', '로봇 피킹', '다크 팩토리', '글로벌 풀필먼트'];
 const SCALE = 3;                 // 물량 배율: 주문 ×3, 건당 금액 ÷3, 원 한 바퀴 = 3건
-const UNIT_COST = 100, SAVE_KEY = 'dabonaettung-v1', TAU = Math.PI * 2;
+const UNIT_COST = 50, SAVE_KEY = 'dabonaettung-v1', TAU = Math.PI * 2;
 const OUT = '#3f3f46';
 
 // ═════ 데이터 ═════
@@ -418,7 +418,7 @@ const shipCost = () => upc(5000 * Math.pow(1.7, S.shipLv) * curN());
 const hireCost = () => upc(2500 * Math.pow(1.65, S.workers));
 const trainCost = () => upc(4000 * Math.pow(1.8, S.trainLv));
 const chOn = () => CH.reduce((a, c) => a + (S.ch[c.id].lv > 0 ? 1 : 0), 0);
-const curN = () => Math.pow(STAGE_BOOST, S.st) * Math.pow(AUTO_M, S.autoLv) * Math.pow(CH_N, Math.max(0, chOn() - 1)) * Math.pow(TIER_N, railTier());   // 주문 1묶음 = 고객 n명
+const curN = () => N_M * Math.pow(STAGE_BOOST, S.st) * Math.pow(AUTO_M, S.autoLv) * Math.pow(CH_N, Math.max(0, chOn() - 1)) * Math.pow(TIER_N, railTier());   // 주문 1묶음 = 고객 n명
 const unitCost = () => UNIT_COST * curN();
 const autoCost = () => upc(AUTO_BASE * Math.pow(AUTO_G, S.autoLv));
 const autoName = lv => AUTO_NAMES[Math.min(AUTO_NAMES.length - 1, Math.floor(lv / 4))];
@@ -718,7 +718,7 @@ const mmss = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2
 function spawn(c, ct){
   const urgent = ct ? Math.random() < ct.urgent : c.urgent ? Math.random() < c.urgent : (S.ch.playauto.lv > 0 && Math.random() < 0.1);
   const max = urgent ? urgentDeadline() : c.deadline ? c.deadline + 2 * S.pickLv : normalDeadline();
-  S.orders.push({id:S.nextId++, n:Math.max(1, Math.round(curN())), ch:c.id, t:max, max, urgent, size:(ct && ct.size > 1) ? ct.size : (c.size || 1),
+  S.orders.push({id:S.nextId++, n:curN(), ch:c.id, t:max, max, urgent, size:(ct && ct.size > 1) ? ct.size : (c.size || 1),
     br:ct ? ct.id : 0, price:Math.round(c.price * (urgent ? 2.5 : 1)) + (ct ? ct.fee : 0)});
   fx.chPulse[c.id] = 1;
   const p = chPos[c.id], q = L.pick && {x:L.pick.x + L.pick.w / 2, y:L.pick.y + L.pick.h * 0.45};
@@ -2631,7 +2631,7 @@ ROWS.pick.push(
 );
 ROWS.pack.push(
   {color:'#111827', up:true, title:() => `⚙️ ${autoName(S.autoLv)} Lv.${S.autoLv} · 📈 물량↑`,
-   desc:() => `📈 물량 단위를 키우는 3가지(자동화·채널 연동·새 레일) 중 하나 · 물량 단위 ×${AUTO_M} — 주문 1묶음 = ${fmtN(curN())}명 → ${fmtN(curN() * AUTO_M)}명 (매출·비용 같이 ↑)` +
+   desc:() => `📈 물량 단위를 키우는 3가지(자동화·채널 연동·새 레일) 중 하나 · 물량 단위 ×${AUTO_M} — 주문 1묶음 = ${fmtQ(curN())}명 → ${fmtQ(curN() * AUTO_M)}명 (매출·비용 같이 ↑)` +
      (Math.floor((S.autoLv + 1) / 4) > Math.floor(S.autoLv / 4) && S.autoLv + 1 < AUTO_NAMES.length * 4 ? ` · 다음: ${autoName(S.autoLv + 1)} 도입` : ''),
    btn:() => fmt(autoCost()), ok:() => S.money >= autoCost(),
    act:() => { S.money -= autoCost(); S.autoLv++; }},
