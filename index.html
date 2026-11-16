@@ -1438,13 +1438,10 @@ const ants = new Map();          // order.id → {x, y, ph, mv, hidden}
 let slots = [], antSpawn = {x:0, y:0};
 // 피킹존에서 패킹존으로 넘어오는 경계선 위의 랜덤한 점 (한 줄이 아니라 넓게 퍼져서 오게)
 // 자기 자리(x,y)에서 레일 반대쪽으로 쭉 나간 패킹존 가장자리 → 거기서 출발하면 레일을 가로지르지 않고 사방에서 몰려옴
+// 흩뿌리기: 자기 자리 바로 위에서 톡 떨어지듯 들어옴 (긴 줄·빛살 무늬 없이)
 function edgeFrom(x, y){
-  const z = L.pack, a = Math.atan2(y - cy, x - cx) + (Math.random() - 0.5) * 0.35, ux = Math.cos(a), uy = Math.sin(a);
-  let t = 1e9;
-  if(ux > 0) t = Math.min(t, (z.x + z.w - 6 - cx) / ux); if(ux < 0) t = Math.min(t, (z.x + 6 - cx) / ux);
-  if(uy > 0) t = Math.min(t, (z.y + z.h - 6 - cy) / uy); if(uy < 0) t = Math.min(t, (z.y + R * 0.6 - cy) / uy);
-  const px = cx + ux * t, py = cy + uy * t;
-  return inExitLane(px, py) ? spawnPt() : {x:px, y:py};
+  const z = L.pack;
+  return {x:x + (Math.random() - 0.5) * R * 0.5, y:Math.max(z.y + 8, y - R * (0.8 + Math.random() * 1.2))};
 }
 function spawnPt(){
   // 사방에서 몰려옴: 40%는 피킹존 쪽, 나머지는 패킹존 가장자리 아무 데서나 (출구 레인 쪽만 피해서)
@@ -1510,7 +1507,8 @@ function buildDotSlots(){
     const n = Math.floor(TAU * rk / gap);
     for(let j = 0; j < n; j++){
       const a = (j / n) * TAU + (k % 2) * (TAU / n / 2);
-      const x = cx + Math.cos(a) * rk + (Math.random() - 0.5) * 0.9, y = cy + Math.sin(a) * rk * KY + (Math.random() - 0.5) * 0.9;
+      const jr = (Math.random() - 0.5) * step, ja = (Math.random() - 0.5) * gap / rk;   // 동심원 줄무늬가 안 보이게 흔들어 줌
+      const x = cx + Math.cos(a + ja) * (rk + jr), y = cy + Math.sin(a + ja) * (rk + jr) * KY;
       if(x < z.x + 4 || x > z.x + z.w - 4 || y < z.y + 28 || y > z.y + z.h - 4) continue;
       if(inExitLane(x, y)) continue;
       // 덩어리 없이: 입구 쪽부터 레일을 따라 고르게 둘러싸며 쌓임
@@ -1787,7 +1785,8 @@ function slotsFor(k){
     const n = Math.floor(TAU * rk / gap);
     for(let j = 0; j < n; j++){
       const a = ea + (j / n) * TAU + (k2 % 2) * (TAU / n / 2);
-      const x = cx + Math.cos(a) * rk, y = cy + Math.sin(a) * rk * KY;
+      const jr = (Math.random() - 0.5) * step, ja = (Math.random() - 0.5) * gap / rk;
+      const x = cx + Math.cos(a + ja) * (rk + jr), y = cy + Math.sin(a + ja) * (rk + jr) * KY;
       if(x < z.x + 8 || x > z.x + z.w - 8 || y < z.y + 32 || y > z.y + z.h - 8) continue;
       if(inExitLane(x, y)) continue;
       let da = ((a - ea) % TAU + TAU) % TAU; if(da > Math.PI) da = TAU - da;
@@ -2164,6 +2163,7 @@ function drawPack(){
   // 안내 문구
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   let msg, col = '#334155';
+  if(hintT > 0 && hintMsg === '대기 중인 주문이 없어요' && S.orders.length) hintT = 0;   // 주문이 다시 들어왔으면 바로 지움
   if(hintT > 0){ msg = hintMsg; col = '#dc2626'; }
   else if(tgt) { msg = (tgt.urgent ? '⚡긴급 ' : '') + (tgt.size > 1 ? '🛋️대형 ' : '') + chDef(tgt.ch).name + ' · ' + fmt(orderPay(tgt)); if(tgt.urgent) col = '#dc2626'; }
   else if(S.stock <= 0 && S.orders.length){ msg = '재고 없음 — 적치 랙을 탭해서 입고!'; col = '#dc2626'; }
