@@ -2105,26 +2105,18 @@ function drawPack(){
   ctx.lineCap = 'butt';
   items.sort((a, b) => a.y - b.y).forEach(it => it.draw());
   // 산더미 꼭대기 건수 + 폭주 경고
-  // 산더미 건수 표시: 새 단계(100·300·1천·3천·1만…)를 넘을 때만 3초 보였다 사라짐
+  // 📦 대기 건수: 쌓인 산 위에 늘 떠 있음 (깜빡임·움직임 없이 숫자만 바뀜)
   const sumN = S.orders.reduce((s, o) => s + (o.n || 1), 0);
-  {
-    const lvl = sumN >= 100 ? Math.floor(Math.log10(sumN) * 2) : -1;
-    if(lvl > pileLbl.lvl){ pileLbl.lvl = lvl; pileLbl.show = 3; pileLbl.t = ''; }
-    else if(lvl < pileLbl.lvl - 1) pileLbl.lvl = lvl + 1;      // 충분히 줄면 다시 알릴 수 있게
-    if(pileLbl.show > 0 && (dotSlots.length || slots.length)){
-      pileLbl.show = Math.max(0, pileLbl.show - 1 / 60);
-      const base = dotSlots[0] || slots[0], fs = 15;
-      const tx = Math.max(z.x + 70, Math.min(z.x + z.w - 70, base.x));
-      const ty = Math.max(z.y + 72, Math.min(base.y - R * 0.6, (dotUsed ? dotTopY : base.y) - 16));
-      if(!pileLbl.t){ pileLbl.x = tx; pileLbl.y = ty; pileLbl.t = `📦 ${fmtN(sumN)}건 돌파${dpp > 1 ? ` · 1점=${fmtN(dpp)}건` : ''}`; }
-      ctx.save(); ctx.globalAlpha = Math.min(1, pileLbl.show / 0.5);
-      ctx.font = `900 ${fs}px Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const w = ctx.measureText(pileLbl.t).width + 18;
-      rr(pileLbl.x - w / 2, pileLbl.y - fs * 0.75, w, fs * 1.5, fs * 0.75); ctx.fillStyle = '#fff'; ctx.fill();
-      ctx.lineWidth = 2; ctx.strokeStyle = '#f97316'; ctx.stroke();
-      ctx.fillStyle = '#c2410c'; ctx.fillText(pileLbl.t, pileLbl.x, pileLbl.y + 1);
-      ctx.restore();
-    }
+  if(sumN > 0){
+    const fs = 13, t = `📦 대기 ${fmtN(sumN)}건${dpp > 1 && dotUsed ? ` · 1점=${fmtN(dpp)}건` : ''}`;
+    const ax = cx + Math.cos(pileEA) * R * 2.2, ay = cy + Math.sin(pileEA) * R * 2.2 * KY - R * 1.1;   // 주문이 몰려오는 쪽 위 (위치 고정)
+    ctx.font = `900 ${fs}px Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const w = ctx.measureText(t).width + 18;
+    const tx = Math.max(z.x + w / 2 + 6, Math.min(z.x + z.w - w / 2 - 6, ax)), ty = Math.max(z.y + 44, Math.min(z.y + z.h - 60, ay));
+    rr(tx - w / 2, ty - fs * 0.8 + 2, w, fs * 1.6, fs * 0.8); ctx.fillStyle = 'rgba(15,23,42,.10)'; ctx.fill();
+    rr(tx - w / 2, ty - fs * 0.8, w, fs * 1.6, fs * 0.8); ctx.fillStyle = 'rgba(255,255,255,.95)'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = sumN >= 100 ? '#fb923c' : '#d4d4d8'; ctx.stroke();
+    ctx.fillStyle = sumN >= 100 ? '#c2410c' : '#3f3f46'; ctx.fillText(t, tx, ty + 0.5);
   }
   // 물량 폭주: 구간에 새로 들어갈 때만 잠깐 알리고 사라짐 (계속 깜빡이지 않게)
   {
