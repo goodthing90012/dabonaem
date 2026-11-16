@@ -582,7 +582,7 @@ function showGameOver(){
     : why === 'ship' ? `이틀 연속 마감 때 기한 넘긴 미출고가 출고보다 많았어요.<br>미출고 ${S.report ? S.report.unship : staleN()}묶음 · 오늘 출고 ${S.report ? S.report.shipped : 0}묶음`
     : `이틀 연속 주문의 절반 넘게 취소됐어요.<br>오늘 취소 ${S.report ? S.report.cancelled : 0}건 · 출고 ${S.report ? S.report.shipped : 0}건`;
   $('goDay').textContent = `D${S.day}에서 멈춤`;
-  $('goStats').innerHTML = `총 출고 ${S.shipped.toLocaleString('ko-KR')}건 · 인류의 ${(S.served / WORLD * 100).toPrecision(2)}%<br>플레이 ${fmtTime(S.playTime)}`;
+  $('goStats').innerHTML = `총 출고 ${fmtN(S.served)}건 · 인류의 ${(S.served / WORLD * 100).toPrecision(2)}%<br>플레이 ${fmtTime(S.playTime)}`;
   $('goRetry').textContent = `☀️ D${S.day} 아침부터 다시`;
   $('report').classList.add('hidden');
   $('gameover').classList.remove('hidden');
@@ -622,7 +622,7 @@ function showReport(){
   $('repTitle').textContent = `🌙 D${r.day} 정산 (18:00)`;
   const row = (k, v, cls = '') => `<tr class="${cls}"><td>${k}</td><td>${v}</td></tr>`;
   $('repBody').innerHTML = `<table>
-    ${row('📦 출고', r.shipped.toLocaleString('ko-KR') + '건')}
+    ${row('📦 출고', fmtN(r.units || r.shipped) + '건' + ((r.units || 0) > r.shipped ? ` (${r.shipped.toLocaleString('ko-KR')}묶음)` : ''))}
     ${row('❌ 취소 · ⏰ 지연', `${r.cancelled}건 · ${r.late}건`)}
     ${row('💰 매출', '+' + fmt(r.revenue), 'plus')}
     ${row('📥 입고비', '-' + fmt(r.stock), 'minus')}
@@ -729,7 +729,7 @@ function complete(o, x, y, byHand, quiet){
   }
   const pay = Math.round(orderPay(o) * (byHand ? 1 + comboBonus() : 1));
   S.stock--; S.money += pay; S.earned += pay; S.shipped++;
-  S.today.shipped++; S.today.revenue += pay; S.served += (o.n || 1);
+  S.today.shipped++; S.today.units = (S.today.units || 0) + (o.n || 1); S.today.revenue += pay; S.served += (o.n || 1);
   if(o.overdue) S.rBad += 0.5; else S.rGood += 1;
   const s = S.ch[o.ch]; s.rep = Math.min(1, s.rep + 0.02);
   if(o.br){ const ct = S.contracts.find(c => c.id === o.br); if(ct) ct.shipped++; }
@@ -2196,7 +2196,7 @@ function drawPack(){
 function drawOut(){
   const tk = fx.truck;
   if(tk.state !== 'idle') return drawOutRaw();
-  return cachedZone('out', L.out, [Math.min(Math.floor(tk.load / SCALE), 8), S.shipped, sheetBadge('out'), S.carrier, landscape].join(), drawOutRaw);
+  return cachedZone('out', L.out, [Math.min(Math.floor(tk.load / SCALE), 8), fmtN(S.served), sheetBadge('out'), S.carrier, landscape].join(), drawOutRaw);
 }
 function drawOutRaw(){
   const z = L.out, tk = fx.truck;
@@ -2213,7 +2213,7 @@ function drawOutRaw(){
   if(tk.state === 'leave'){ ctx.font = '700 12px Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif'; ctx.fillStyle = '#7c3aed'; ctx.textAlign = 'center'; ctx.fillText('부릉~💨', tx - s * 1.4, ty - s * 0.5); }
   ctx.restore();
   // 쌓이는 출고 박스 더미 (트럭 떠난 동안)
-  label(z, `🚚 출고 ${S.shipped.toLocaleString('ko-KR')}`, sheetBadge('out'));
+  label(z, `🚚 출고 ${fmtN(S.served)}건`, sheetBadge('out'));
   return {x:tx0 - s * 0.3, y:ty - s * 0.6};
 }
 function drawBunting(){
@@ -2575,8 +2575,8 @@ ROWS.pick.push(
    act:() => { S.money -= urgentCost(); S.urgentLv++; }},
 );
 ROWS.pack.push(
-  {color:'#111827', up:true, title:() => `⚙️ ${autoName(S.autoLv)} Lv.${S.autoLv}`,
-   desc:() => `물량 단위 ×${AUTO_M} — 주문 1묶음 = ${fmtN(curN())}명 → ${fmtN(curN() * AUTO_M)}명 (매출·비용 같이 ↑)` +
+  {color:'#111827', up:true, title:() => `⚙️ ${autoName(S.autoLv)} Lv.${S.autoLv} · ⭐ 성장 핵심`,
+   desc:() => `가장 빨리 크는 업그레이드! 물량 단위 ×${AUTO_M} — 주문 1묶음 = ${fmtN(curN())}명 → ${fmtN(curN() * AUTO_M)}명 (매출·비용 같이 ↑)` +
      (Math.floor((S.autoLv + 1) / 4) > Math.floor(S.autoLv / 4) && S.autoLv + 1 < AUTO_NAMES.length * 4 ? ` · 다음: ${autoName(S.autoLv + 1)} 도입` : ''),
    btn:() => fmt(autoCost()), ok:() => S.money >= autoCost(),
    act:() => { S.money -= autoCost(); S.autoLv++; }},
@@ -2671,6 +2671,7 @@ $('mktBtn').onclick = () => sheet === 'mkt' ? closeSheet() : openSheet('mkt');
 $('salesBtn').onclick = () => sheet === 'sales' ? closeSheet() : openSheet('sales');
 
 function setText(el, v){ if(el.textContent !== v) el.textContent = v; }
+const etaHist = [];
 function refresh(){
   if(sheet === 'sales' && salesSig() !== sheetSig){ const sc = $('rows').scrollTop; openSheet('sales'); $('rows').scrollTop = sc; return; }
   for(const el of rowEls){
@@ -2688,7 +2689,21 @@ function refresh(){
     const si = Math.min(S.st, STAGES.length - 1), stg = STAGES[si], prev = si ? STAGES[si - 1].goal : 0;
     const k = S.st >= STAGES.length ? 1 : Math.min(1, Math.max(0, (S.served - prev) / (stg.goal - prev)));
     const left = S.st >= STAGES.length ? `🏆 클리어 · ${fmtTime(S.playTime)}` : `${stg.icon} ${stg.name} ${fmtN(S.served)} / ${fmtN(stg.goal)}명`;
-    const g = `<span>🌍 인류의 ${pct}% · ⭐${(S.rating || 4).toFixed(1)}</span><span>${left}</span>`;
+    // 다음 단계까지 예상 시간 (최근 1분 속도 기준) — 오래 걸리면 핵심 업그레이드 힌트
+    const tn = performance.now() / 1000;
+    etaHist.push([tn, S.served]); while(etaHist.length > 2 && tn - etaHist[0][0] > 60) etaHist.shift();
+    let eta = '';
+    if(S.st < STAGES.length && tn - etaHist[0][0] > 15){
+      const rate = (S.served - etaHist[0][1]) / (tn - etaHist[0][0]);
+      if(rate > 0){
+        const m = (stg.goal - S.served) / rate / 60;
+        eta = m < 1 ? ' · ⏱ 곧 다음 단계' : ` · ⏱ 약 ${m >= 600 ? '600+' : Math.ceil(m)}분`;
+        if(m > 20 && S.money >= autoCost() * 0.5) eta += ' 💡⭐핵심↑';
+      }
+    }
+    const narrow = innerWidth < 520 && eta;
+    const right = narrow && S.st < STAGES.length ? `${stg.icon} ${fmtN(S.served)}/${fmtN(stg.goal)}` : left;
+    const g = `<span>🌍 ${narrow ? '' : '인류의 '}${pct}% · ⭐${(S.rating || 4).toFixed(1)}${eta}</span><span>${right}</span>`;
     const gt = $('goalText'); if(gt._h !== g){ gt.innerHTML = g; gt._h = g; }
     $('goalFill').style.width = (k * 100).toFixed(1) + '%';
   }
@@ -2732,7 +2747,7 @@ $('soundBtn').onclick = () => { S.sound = !S.sound; soundLabel(); if(S.sound){ S
 function spinLabel(){ $('spinBtn').textContent = SPIN[S.spin] || SPIN.ccw; }
 $('spinBtn').onclick = () => { S.spin = SPIN_NEXT[S.spin] || 'ccw'; spinLabel(); save(); };
 $('menuBtn').onclick = () => {
-  $('statsText').innerHTML = `총 출고 <b>${S.shipped.toLocaleString('ko-KR')}</b>건 · 취소 <b>${S.cancelled.toLocaleString('ko-KR')}</b>건<br>누적 매출 <b>${fmt(S.earned)}</b> · 작업자 ${S.workers}명<br>플레이 ${fmtTime(S.playTime)} · 고객 ${fmtN(S.served)}명<br>최고 콤보 ${S.maxCombo || 0} · 화주사 계약 완료 ${S.contractsDone} · 해지 ${S.contractsFailed} · 위약금 ${fmt(S.penalties || 0)}`;
+  $('statsText').innerHTML = `총 출고 <b>${fmtN(S.served)}</b>건 (${S.shipped.toLocaleString('ko-KR')}묶음) · 취소 <b>${S.cancelled.toLocaleString('ko-KR')}</b>건<br>누적 매출 <b>${fmt(S.earned)}</b> · 작업자 ${S.workers}명<br>플레이 ${fmtTime(S.playTime)} · 고객 ${fmtN(S.served)}명<br>최고 콤보 ${S.maxCombo || 0} · 화주사 계약 완료 ${S.contractsDone} · 해지 ${S.contractsFailed} · 위약금 ${fmt(S.penalties || 0)}`;
   resetArm = false; $('resetBtn').textContent = '처음부터 다시'; spinLabel(); soundLabel(); repayLabel();
   $('menu').classList.remove('hidden');
 };
