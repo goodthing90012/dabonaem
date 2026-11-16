@@ -1147,8 +1147,15 @@ const pileLbl = {x:0, y:0, t:'', lvl:-1, show:0};
 const MAXDOTS = 2500, DOT_LIFT = 0.075;   // 큼직한 택배 상자 최대 2,500개 (넘으면 1개 = 여러 건)
 let dotSlots = [], dpp = 1, dotTopY = 0, dotUsed = 0;
 const crowds = new Map();          // order.id → {k, xs, ys, ls}
-const frontN = () => S.st < 2 ? 24 : 0;   // 초반엔 맨 앞 24묶음만 귀여운 컨테이너
-const isTote = (o, i) => i < frontN() && (o.n || 1) === 1;   // 1건짜리일 때만 컨테이너 (그래야 보이는 개수 = 실제 건수)
+// 쌓인 주문이 적으면 맨 앞 24묶음을 귀여운 컨테이너로, 많아지면 전부 작은 점 상자로 (단계와 무관, 경계에서 깜빡이지 않게 여유)
+let bigInOn = true;
+function frontN(){
+  const n = S.orders.length;
+  if(bigInOn && n > 60) bigInOn = false;
+  else if(!bigInOn && n < 20) bigInOn = true;
+  return bigInOn ? 24 : 0;
+}
+const isTote = (o, i) => i < frontN();
 // 점 군중 자리: 레일 주변 대기 구역 4곳에서 덩어리로 불어나다 서로 이어짐 (레퍼런스 느낌)
 function buildDotSlots(){
   dotSlots = [];
@@ -1431,7 +1438,6 @@ function drawCrowd(a, o, isTarget){
   }
 }
 function drawAnt(a, o, isTarget){
-  if(S.st >= 2) return drawCrowd(a, o, isTarget);
   const s = R * 0.3 * (o.size > 1 ? 1.4 : 1);
   const low = o.t / o.max < 0.3;
   const x = a.x, y = a.y - a.l * R * 0.17;
@@ -1448,6 +1454,13 @@ function drawAnt(a, o, isTarget){
   ctx.fillStyle = OUT;
   ctx.beginPath(); ctx.arc(x - s * 0.15, yb - s * 0.2, s * 0.065, 0, TAU); ctx.arc(x + s * 0.15, yb - s * 0.2, s * 0.065, 0, TAU); ctx.fill();
   if(o.br){ const ct = S.contracts.find(c => c.id === o.br); if(ct){ ctx.font = `${Math.round(s * 0.55)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(BRANDS[ct.b].icon, x - s * 0.5, yb - s * 0.85); } }
+  if(isTarget && (o.n || 1) > 1){    // 1묶음 = 여러 건이면 몇 건인지 (겹치지 않게 맨 앞 하나에만)
+    const t = '×' + fmtN(o.n), fs = Math.max(8, Math.round(s * 0.42));
+    ctx.font = `900 ${fs}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(t).width + 6, ty = yb - s * (o.urgent ? 1.55 : 1.05);
+    rr(x - tw / 2, ty - fs * 0.65, tw, fs * 1.3, fs * 0.65); ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.fill();
+    ctx.fillStyle = '#3f3f46'; ctx.fillText(t, x, ty + 0.5);
+  }
   if(o.urgent){ ctx.font = `${Math.round(s * 0.6)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('⚡', x, yb - s * 1.05); }
   else if(low){ ctx.fillStyle = '#60a5fa'; ctx.beginPath(); ctx.ellipse(x + s * 0.5, yb - s * 0.85 + (now / 14 % 5), 1.8, 2.6, 0, 0, TAU); ctx.fill(); }
 }
