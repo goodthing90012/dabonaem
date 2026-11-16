@@ -202,7 +202,7 @@ const STAGES = [
   {name:'아시아',    icon:'🌏', goal:4.7e9},
   {name:'전 인류',   icon:'🌍', goal:WORLD},
 ];
-const AUTO_BASE = 3000, AUTO_G = 3.1, AUTO_M = 1.35, STAGE_BOOST = 3; // 봇 시뮬레이션 튜닝(연동사·택배 단가·평점·단골·광고 포함): 보통 플레이 ~72분
+const AUTO_BASE = 3000, AUTO_G = 3.1, AUTO_M = 1.35, STAGE_BOOST = 3; // 봇 시뮬레이션 튜닝(연동사·택배 단가·평점·단골·광고·연동료·설비 유지비 포함): 보통 플레이 ~73분
 const AUTO_NAMES = ['포장 작업대', '핸드 스캐너', '컨베이어', '자동 포장기', '소터', 'AGV 로봇', '로봇 피킹', '다크 팩토리', '글로벌 풀필먼트'];
 const SCALE = 3;                 // 물량 배율: 주문 ×3, 건당 금액 ÷3, 원 한 바퀴 = 3건
 const UNIT_COST = 100, SAVE_KEY = 'dabonaettung-v1', TAU = Math.PI * 2;
@@ -269,7 +269,13 @@ const wageOf = () => Math.round((8000 + 1500 * S.trainLv) * curN());      // 작
 const rentOf = () => Math.round((5000 + 3000 * S.capLv) * curN());        // 센터 임대료 (랙 확장할수록 ↑)
 const maintOf = () => Math.round(1000 * S.railLv * curN());             // 레일 설비 유지비
 const interestOf = () => Math.round(S.debt * 0.05); // 대출 이자 하루 5%
-const dailyCost = () => wageOf() * S.workers + rentOf() + maintOf() + interestOf() + adCost();
+// 채널 연동료: 연동한 채널마다 하루 800원 × 물량 단위 (레벨이 오를수록 +50%씩) — 엑셀은 무료
+const CH_FEE = 800, UPKEEP = 0.01;
+const chFeeOne = (c, lv) => (c.id === 'excel' || !lv) ? 0 : Math.round(CH_FEE * (1 + 0.5 * (lv - 1)) * curN());
+const chFeeOf = () => CH.reduce((a, c) => a + chFeeOne(c, S.ch[c.id].lv), 0);
+// 레일·포장 라인 유지비: 설치한 설비값의 하루 1%
+const railUpkeepOf = () => Math.round((RAILS[railTier()].cost + 50000 * (Math.pow(5, S.lineLv || 0) - 1) / 4) * UPKEEP * curN());
+const dailyCost = () => wageOf() * S.workers + rentOf() + maintOf() + chFeeOf() + railUpkeepOf() + interestOf() + adCost();
 const gameMin = () => 540 + S.dayT / DAY_SEC * 540;
 const clockStr = () => { const m = Math.min(1080, gameMin()); return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`; };
 function fresh(){
@@ -594,11 +600,12 @@ function retryMorning(){
 }
 function endDay(){
   const t = S.today, wages = wageOf() * S.workers, rent = rentOf(), maint = maintOf(), interest = interestOf(), ads = adCost();
-  const fixed = wages + rent + maint + interest + ads;
+  const chfee = chFeeOf(), upkeep = railUpkeepOf();
+  const fixed = wages + rent + maint + chfee + upkeep + interest + ads;
   S.money -= fixed;
   let loan = 0;
   if(S.money < 0){ loan = -S.money; S.debt += loan; S.money = 0; }
-  S.report = Object.assign({day:S.day, ads, rating:S.rating, wages, workers:S.workers, rent, maint, interest, loan, debt:S.debt,
+  S.report = Object.assign({day:S.day, ads, rating:S.rating, wages, workers:S.workers, rent, maint, chfee, upkeep, interest, loan, debt:S.debt,
     net:t.revenue - t.stock - t.penalty - t.mkt - fixed}, t);
   S.revHist = (S.revHist || []).concat([t.revenue]).slice(-3);
   const j = judgeDay(t);
@@ -621,7 +628,9 @@ function showReport(){
     ${r.penalty ? row('📋 위약금', '-' + fmt(r.penalty), 'minus') : ''}
     ${row(`👷 인건비 (${r.workers}명)`, '-' + fmt(r.wages), 'minus')}
     ${row('🏢 임대료', '-' + fmt(r.rent), 'minus')}
-    ${r.maint ? row('🔧 설비 유지비', '-' + fmt(r.maint), 'minus') : ''}
+    ${r.maint ? row('🔧 레일 모터 유지비', '-' + fmt(r.maint), 'minus') : ''}
+    ${r.upkeep ? row('🚝 레일·포장 라인 유지비', '-' + fmt(r.upkeep), 'minus') : ''}
+    ${r.chfee ? row('🔗 채널 연동료', '-' + fmt(r.chfee), 'minus') : ''}
     ${r.ads ? row('📢 광고비', '-' + fmt(r.ads), 'minus') : ''}
     ${r.rating ? row('⭐ 평점', r.rating.toFixed(1)) : ''}
     ${r.interest ? row('🏦 대출 이자', '-' + fmt(r.interest), 'minus') : ''}
@@ -2456,8 +2465,9 @@ CH.forEach(c => ROWS.channel.push({
     if(c.st > S.st) return `🔒 ${STAGES[c.st].icon} ${STAGES[c.st].name} 단계에서 열려요`;
     if(c.via && !S.ch[c.via].lv) return '플레이오토 연동 후 열려요';
     const tr = c.trait ? c.trait + ' · ' : '';
-    if(!s.lv) return `${tr}${c.via ? '플레이오토 연동 · ' : ''}분당 약 ${(c.rate * 60).toFixed(0)}건 · 건당 ${fmt(c.price)}`;
-    return `${tr}분당 ${(chRate(c, false) * 60).toFixed(1)}건 · 건당 ${fmt(c.price)} · 평판 ${Math.round(s.rep * 100)}%`;
+    const fee = c.id === 'excel' ? '' : ` · 연동료 일 ${fmt(chFeeOne(c, s.lv + 1))}`;
+    if(!s.lv) return `${tr}${c.via ? '플레이오토 연동 · ' : ''}분당 약 ${(c.rate * 60).toFixed(0)}건 · 건당 ${fmt(c.price)}${fee}`;
+    return `${tr}분당 ${(chRate(c, false) * 60).toFixed(1)}건 · 건당 ${fmt(c.price)} · 평판 ${Math.round(s.rep * 100)}%${c.id === 'excel' ? '' : ` · 연동료 일 ${fmt(chFeeOne(c, s.lv))}→${fmt(chFeeOne(c, s.lv + 1))}`}`;
   },
   btn:() => (S.ch[c.id].lv ? '마케팅 ' : '연동 ') + fmt(chCost(c)),
   ok:() => !(c.st > S.st) && !(c.via && !S.ch[c.via].lv) && S.money >= chCost(c),
@@ -2512,12 +2522,12 @@ ROWS.pack.push(
    desc:() => { const cur = RAILS[railTier()], nx = RAILS[railTier() + 1];
      if(!nx) return `한 바퀴 처리량 ×${cur.mult} · 더 좋은 레일은 없어요`;
      if(nx.st > S.st) return `🔒 ${STAGES[nx.st].icon} ${STAGES[nx.st].name} 단계에서 살 수 있어요 · 지금 ${cur.name} ×${cur.mult}`;
-     return `${cur.name} ×${cur.mult} → ${nx.name} ×${nx.mult} (한 바퀴 처리량) · 관성 +${(0.25 * Math.log(Math.max(1.01, maxRev() / 0.04))).toFixed(1)}초`; },
+     return `${cur.name} ×${cur.mult} → ${nx.name} ×${nx.mult} (한 바퀴 처리량) · 관성 +${(0.25 * Math.log(Math.max(1.01, maxRev() / 0.04))).toFixed(1)}초 · 유지비 일 +${fmt(Math.round((nx.cost - cur.cost) * UPKEEP * curN()))}`; },
    btn:() => { const nx = RAILS[railTier() + 1]; return !nx ? 'MAX' : nx.st > S.st ? '🔒' : fmt(railTierCost()); },
    ok:() => { const nx = RAILS[railTier() + 1]; return !!nx && nx.st <= S.st && S.money >= railTierCost(); },
    once:true, act:() => { S.money -= railTierCost(); S.railTier = railTier() + 1; say(`🚝 ${RAILS[railTier()].name} 설치 완료! 처리량 ×${RAILS[railTier()].mult}`, '#0f172a', 2.2); fx.confetti = 1.2; SFX.ding(6); }},
   {color:'#0ea5e9', up:true, title:() => `🛤️ 포장 라인 증설 (${lines()}라인)`,
-   desc:() => `한 바퀴 처리량 ×${lines()} → ×${lines() + 1} (= ${fmtN(perRevBase() * RAILS[railTier()].mult * lines() * curN())}건 → ${fmtN(perRevBase() * RAILS[railTier()].mult * (lines() + 1) * curN())}건)`,
+   desc:() => `한 바퀴 처리량 ×${lines()} → ×${lines() + 1} (= ${fmtN(perRevBase() * RAILS[railTier()].mult * lines() * curN())}건 → ${fmtN(perRevBase() * RAILS[railTier()].mult * (lines() + 1) * curN())}건) · 유지비 일 +${fmt(Math.round(lineCost() * UPKEEP))}`,
    btn:() => fmt(lineCost()), ok:() => S.money >= lineCost(),
    act:() => { S.money -= lineCost(); S.lineLv = (S.lineLv || 0) + 1; say(`🛤️ ${lines()}번 라인 가동!`, '#0369a1', 1.6); }},
   {color:'#3b82f6', up:true, title:() => `레일 모터 Lv.${S.railLv}`,
