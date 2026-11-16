@@ -102,6 +102,7 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
 .rbRow button:disabled{background:#ececef;color:#a1a1aa}
 #endRebirth{background:linear-gradient(#a78bfa,#7c3aed)!important;color:#fff!important}
 #rebirthBtn{background:#f5f3ff;color:#6d28d9}
+#reloadBtn{background:#eff6ff;color:#1d4ed8}
 #menu{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:10}
 #menu .box{background:#fff;border-radius:18px;padding:20px;width:min(320px,90vw)}
 #menu h2{font-size:18px;margin-bottom:4px}
@@ -237,7 +238,9 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
     <button id="soundBtn"></button>
     <button id="spinBtn"></button>
     <button id="rebirthBtn">🌀 환생 · 명성 상점</button>
+    <button id="reloadBtn">🔄 새 버전 확인 · 새로고침</button>
     <button id="closeMenu">계속하기</button>
+    <p id="verText" style="text-align:center;font-size:11px;color:#a1a1aa;margin-top:8px"></p>
     <button id="resetBtn">처음부터 다시</button>
   </div>
 </div>
@@ -3031,6 +3034,18 @@ function doRebirth(){
   rbArm = 0; renderRebirth(); $('rebirth').classList.remove('hidden');   // 바로 명성 상점에서 쓰게
 }
 $('rebirthBtn').onclick = openRebirth;
+// 🔄 새로고침: 저장 → 저장해 둔 옛 버전 파일 지우기 → 최신 버전으로 다시 열기 (진행 상황은 그대로)
+const APP_VER = 'v110';
+$('verText').textContent = `다보냄 ${APP_VER}`;
+$('reloadBtn').onclick = async () => {
+  $('reloadBtn').textContent = '⏳ 최신 버전 받는 중…';
+  try{ save(); saveMeta(); }catch(e){}
+  try{
+    if('serviceWorker' in navigator){ const reg = await navigator.serviceWorker.getRegistration(); if(reg) await reg.update(); }
+    if(window.caches){ const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); }
+  }catch(e){}
+  location.reload();
+};
 $('endRebirth').onclick = openRebirth;
 $('rbClose').onclick = () => { rbArm = 0; $('rebirth').classList.add('hidden'); };
 $('rebirth').addEventListener('pointerdown', e => { if(e.target === $('rebirth')){ rbArm = 0; $('rebirth').classList.add('hidden'); } });
