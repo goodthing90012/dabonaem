@@ -425,8 +425,8 @@ const hireCost = () => upc(2500 * Math.pow(1.65, S.workers));
 const trainCost = () => upc(4000 * Math.pow(1.8, S.trainLv));
 const chOn = () => CH.reduce((a, c) => a + (S.ch[c.id].lv > 0 ? 1 : 0), 0);
 // 📈 규모의 경제: 많이 보낼수록 1묶음이 저절로 커짐 (누적 고객 1만 명 기준, 10배마다 ×1.41) — 가끔 업그레이드하는 플레이로 전 인류 ~45분
-const SCALE_E = 0.15;
-const curN = () => N_M * Math.pow(Math.max(1, (S.served || 0) / 1e4), SCALE_E) * Math.pow(STAGE_BOOST, S.st) * Math.pow(AUTO_M, S.autoLv) * Math.pow(CH_N, Math.max(0, chOn() - 1)) * Math.pow(TIER_N, railTier());   // 주문 1묶음 = 고객 n명
+const SCALE_E = 0.15;   // ※ 마지막 '전 인류' 단계 진출 때는 단계 보너스(×5)가 없음 — 47억→82억 구간이 순식간에 끝나지 않게
+const curN = () => N_M * Math.pow(Math.max(1, (S.served || 0) / 1e4), SCALE_E) * Math.pow(STAGE_BOOST, Math.min(S.st, 3)) * Math.pow(AUTO_M, S.autoLv) * Math.pow(CH_N, Math.max(0, chOn() - 1)) * Math.pow(TIER_N, railTier());   // 주문 1묶음 = 고객 n명
 const unitCost = () => UNIT_COST * curN();
 const autoCost = () => upc(AUTO_BASE * Math.pow(AUTO_G, S.autoLv));
 const autoName = lv => AUTO_NAMES[Math.min(AUTO_NAMES.length - 1, Math.floor(lv / 4))];
@@ -792,7 +792,7 @@ function update(dt){
     if(S.st >= STAGES.length){ finishGame(); break; }
     const nx = STAGES[S.st];
     say(`🎉 ${done.icon} ${done.name} 커버 완료!`, '#7c3aed', 3);
-    say(`${nx.icon} ${nx.name} 진출 · 물량 단위 ×${STAGE_BOOST}`, '#7c3aed', 3);
+    say(S.st >= 4 ? `${nx.icon} ${nx.name} — 마지막 관문! 보너스 없이 끝까지` : `${nx.icon} ${nx.name} 진출 · 물량 단위 ×${STAGE_BOOST}`, '#7c3aed', 3);
     fx.confetti = 2.5;
     const opened = CH.filter(c => c.st === S.st).map(c => c.name);
     if(opened.length) say(`🔓 새 채널: ${opened.join(', ')}`, '#0f766e', 3);
