@@ -551,7 +551,7 @@ function strike(ct){
   if(ct.cancels > ct.limit + 2) endContract(ct, false);      // 위약금 구간도 넘김 → 해지
   else if(ct.cancels > ct.limit) chargePenalty(ct, 1);       // 허용 초과 → 위약금
 }
-// ⏰ 택배 집하 마감: 남은 물량은 지연으로 기록(단가는 그대로), 화주사 물량이 남았으면 SLA 위반 1회
+// ⏰ 택배 집하 마감: 남은 물량은 지연으로 기록 (단가·위약금 없음 — 화주사 SLA는 처리기한을 실제로 넘겼을 때만)
 function doCutoff(h){
   let late = 0; const hit = new Set();
   for(const o of S.orders){
@@ -559,7 +559,6 @@ function doCutoff(h){
     if(o.br) hit.add(o.br);
   }
   S.today.late += late;
-  for(const id of hit){ const ct = S.contracts.find(c => c.id === id); if(ct) strike(ct); }
   if(fx.truck.state === 'idle'){ fx.truck.state = 'leave'; fx.truck.t = 0; }
   say(late ? `⏰ ${h}:00 집하 마감! 미출고 ${late}건 지연` : `⏰ ${h}:00 집하 마감! 전량 출고 👍`, late ? '#dc2626' : '#16a34a', 2.6);
   if(late) fx.flash = 0.5;
