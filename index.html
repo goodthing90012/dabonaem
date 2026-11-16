@@ -329,7 +329,9 @@ const chDef = id => CH.find(c => c.id === id);
 const railMult = () => 1 + 0.35 * S.railLv;
 // 작업자는 레일이 돌 때만 같이 포장 → 한 바퀴당 처리 건수를 늘려줌
 const W_PER = 0.25, W_TRAIN = 0.15;   // 작업자 1명당 한 바퀴 +0.25건, 교육 레벨당 작업자 몫 +15%
-const perRevBase = () => SCALE + S.workers * W_PER * (1 + W_TRAIN * S.trainLv);
+// 한 바퀴에 포장하는 묶음 수 ×2 (1묶음 크기를 절반으로 줄인 만큼 처리량도 두 배 → 많이 처리할수록 그대로 더 벌림)
+const PER_M = 2;
+const perRevBase = () => PER_M * (SCALE + S.workers * W_PER * (1 + W_TRAIN * S.trainLv));
 const RAILS = [
   {name:'롤러 레일',            mult:1,   st:0, cost:0},
   {name:'벨트 컨베이어',        mult:1.6, st:0, cost:37500},
@@ -2668,11 +2670,11 @@ ROWS.pack.push(
    btn:() => S.railLv >= 15 ? 'MAX' : fmt(railCost()), ok:() => S.railLv < 15 && S.money >= railCost(),
    act:() => { S.money -= railCost(); S.railLv++; }},
   {color:'#f97316', up:true, title:() => `작업자 고용 (${S.workers}/${MAX_WORKERS})`,
-   desc:() => `한 바퀴 ${fmtQ(perRev() * curN())}건 → ${fmtQ(perRev() * curN() * (perRevBase() + W_PER * (1 + W_TRAIN * S.trainLv)) / perRevBase())}건 (레일이 돌 때만 일해요) · 일당 ${fmt(wageOf())}`,
+   desc:() => `한 바퀴 ${fmtQ(perRev() * curN())}건 → ${fmtQ(perRev() * curN() * (perRevBase() + PER_M * W_PER * (1 + W_TRAIN * S.trainLv)) / perRevBase())}건 (레일이 돌 때만 일해요) · 일당 ${fmt(wageOf())}`,
    btn:() => S.workers >= MAX_WORKERS ? 'MAX' : fmt(hireCost()), ok:() => S.workers < MAX_WORKERS && S.money >= hireCost(),
    act:() => { S.money -= hireCost(); S.workers++; S.wp.push(0); }},
   {color:'#fb923c', up:true, title:() => `작업자 교육 Lv.${S.trainLv}`,
-   desc:() => S.workers ? `작업자 몫 +15% — 한 바퀴 ${fmtQ(perRev() * curN())}건 → ${fmtQ(perRev() * curN() * (SCALE + S.workers * W_PER * (1 + W_TRAIN * (S.trainLv + 1))) / perRevBase())}건 · 일당 +${fmt(1500 * curN())}` : '작업자를 먼저 고용하세요',
+   desc:() => S.workers ? `작업자 몫 +15% — 한 바퀴 ${fmtQ(perRev() * curN())}건 → ${fmtQ(perRev() * curN() * PER_M * (SCALE + S.workers * W_PER * (1 + W_TRAIN * (S.trainLv + 1))) / perRevBase())}건 · 일당 +${fmt(1500 * curN())}` : '작업자를 먼저 고용하세요',
    btn:() => S.trainLv >= 10 ? 'MAX' : fmt(trainCost()), ok:() => S.trainLv < 10 && S.money >= trainCost(),
    act:() => { S.money -= trainCost(); S.trainLv++; }},
 );
