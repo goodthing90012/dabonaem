@@ -1,0 +1,2321 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="다보냄">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>다보냄 — 물류센터 패킹 게임</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR","Malgun Gothic",sans-serif;
+  user-select:none;-webkit-user-select:none;overscroll-behavior:none}
+#app{height:100dvh;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+#hud{display:flex;align-items:center;gap:6px;padding:8px 10px;background:#fff;border-bottom:2px solid #e4e4e7;z-index:3}
+.stat{display:flex;align-items:center;gap:4px;background:#f4f4f5;border-radius:12px;padding:5px 9px;font-size:13px;white-space:nowrap;font-weight:600}
+.stat b{font-variant-numeric:tabular-nums}
+.stat.money{background:#dcfce7;color:#166534;font-size:15px}
+.stat.money small{font-size:10px;color:#dc2626;font-weight:800}
+.stat.money.indebt{background:#fef3c7}
+.stat.warn{background:#fee2e2;color:#991b1b}
+#hud .sp{flex:1}
+#menuBtn,#mktBtn,#salesBtn{border:0;background:#f4f4f5;border-radius:12px;width:36px;height:32px;font-size:16px;cursor:pointer;position:relative;flex:0 0 auto}
+#mktBtn{background:#fce7f3}
+#salesBtn{background:#ccfbf1}
+#mktBtn i,#salesBtn i{position:absolute;top:-3px;right:-3px;width:10px;height:10px;border-radius:50%;background:#ef4444;display:none}
+#mktBtn.ready i,#salesBtn.ready i{display:block}
+#boostBar{display:flex;gap:4px;overflow:hidden}
+#boostBar span{background:#fce7f3;color:#9d174d;border-radius:10px;padding:4px 7px;font-size:12px;font-weight:700;white-space:nowrap}
+#goal{background:#18181b;color:#fff;padding:5px 10px 6px;font-size:12px;font-weight:700;z-index:3}
+#goal #goalText{display:flex;justify-content:space-between;gap:8px;white-space:nowrap;overflow:hidden}
+#goal .gbar{height:5px;border-radius:3px;background:#3f3f46;margin-top:4px;overflow:hidden}
+#goal .gbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#a78bfa,#34d399);border-radius:3px;transition:width .3s}
+#ending{position:fixed;inset:0;background:rgba(9,9,11,.75);display:flex;align-items:center;justify-content:center;z-index:12}
+#ending .box{background:#fff;border-radius:20px;padding:22px 20px 16px;width:min(340px,92vw);text-align:center}
+#ending h2{font-size:22px;margin-bottom:4px}
+#ending .big{font-size:34px;font-weight:900;margin:8px 0;font-variant-numeric:tabular-nums}
+#ending p{font-size:13px;color:#52525b;margin:4px 0}
+#ending button{width:100%;margin-top:10px;border:0;border-radius:12px;padding:12px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer}
+#endContinue{background:#18181b;color:#fff}
+#endNew{background:#f4f4f5;color:#18181b}
+#banner{position:absolute;top:6px;left:50%;transform:translateX(-50%);max-width:calc(100% - 16px);padding:5px 12px;border-radius:12px;font-size:12px;font-weight:800;text-align:center;background:#fef3c7;color:#92400e;z-index:4;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.18);width:max-content;white-space:normal}
+#banner.live{background:#fee2e2;color:#991b1b}
+@keyframes pulse{to{background:#fecaca}}
+.hidden{display:none!important}
+#stage{position:relative;flex:1;min-height:0}
+#cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
+#sheet{position:fixed;left:0;right:0;bottom:0;max-height:56dvh;display:flex;flex-direction:column;background:#fff;
+  border-radius:20px 20px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.15);z-index:5;padding-bottom:env(safe-area-inset-bottom);
+  transform:translateY(calc(100% + 40px));transition:transform .22s ease}
+#sheet.open{transform:none}
+#sheetHead{display:flex;align-items:center;padding:12px 14px 8px}
+#sheetHead h3{flex:1;font-size:16px}
+#sheetClose{border:0;background:#f4f4f5;border-radius:10px;width:32px;height:32px;font-size:16px;cursor:pointer}
+#sheet .grab{width:40px;height:4px;border-radius:2px;background:#d4d4d8;margin:8px auto 0}
+#rows{overflow-y:auto;padding:0 14px 14px;-webkit-overflow-scrolling:touch}
+.row{display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid #f4f4f5}
+.dot{width:12px;height:12px;border-radius:50%;flex:0 0 auto}
+.info{flex:1;min-width:0}
+.info .t{font-size:14px;font-weight:700}
+.info .d{font-size:12px;color:#71717a;margin-top:2px}
+.row button{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:manipulation;flex:0 0 auto;border:0;border-radius:12px;padding:9px 10px;min-width:98px;font-size:13px;font-weight:700;font-family:inherit;
+  background:#3b82f6;color:#fff;cursor:pointer;font-variant-numeric:tabular-nums;box-shadow:0 3px 0 #1d4ed8}
+.row button:disabled{background:#e4e4e7;color:#a1a1aa;cursor:default;box-shadow:0 3px 0 #d4d4d8}
+.row button.alt{background:#8b5cf6;box-shadow:0 3px 0 #6d28d9}
+.row button:not(:disabled):active{transform:translateY(2px);box-shadow:0 1px 0 #1d4ed8}
+#menu{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:10}
+#menu .box{background:#fff;border-radius:18px;padding:20px;width:min(320px,90vw)}
+#menu h2{font-size:18px;margin-bottom:4px}
+#menu p{font-size:13px;color:#52525b;margin:6px 0}
+#menu button{width:100%;margin-top:10px;border:0;border-radius:12px;padding:11px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer}
+#closeMenu{background:#3b82f6;color:#fff}
+#report{position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;z-index:11}
+#report .box{background:#fff;border-radius:18px;padding:18px 18px 14px;width:min(340px,92vw);max-height:90dvh;overflow:auto}
+#report h2{font-size:18px;margin-bottom:8px}
+#report table{width:100%;font-size:13px;border-collapse:collapse}
+#report td{padding:4px 2px;border-bottom:1px solid #f4f4f5}
+#report td:last-child{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+#report tr.minus td:last-child{color:#dc2626}
+#report tr.plus td:last-child{color:#16a34a}
+#report tr.sum td{border-top:2px solid #e4e4e7;font-size:15px}
+#report .note{font-size:12px;color:#71717a;margin-top:8px}
+#report button{width:100%;margin-top:10px;border:0;border-radius:12px;padding:11px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer}
+#nextDay{background:#f59e0b;color:#fff}
+#repayBtn,#menuRepay{background:#ecfdf5;color:#047857}
+#spinBtn{background:#eff6ff;color:#1d4ed8}
+#soundBtn{background:#f4f4f5;color:#27272a}
+#resetBtn{background:#fee2e2;color:#991b1b}
+@media (max-width:430px){
+  #hud{gap:4px;padding:7px 6px}
+  .stat{padding:4px 6px;font-size:12px;gap:2px}
+  .stat.money{font-size:13px}
+  #menuBtn,#mktBtn,#salesBtn{width:30px;height:30px;font-size:14px}
+  #boostBar span{padding:3px 5px;font-size:11px}
+}
+#hud{overflow:hidden}
+#boostBar{min-width:0}
+@media (min-width:860px){
+  #sheet{left:auto;right:14px;bottom:14px;width:400px;border-radius:20px;max-height:70dvh}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="hud">
+    <div class="stat money" id="moneyStat">💰<b id="money">0</b><small id="debt"></small></div>
+    <div class="stat" id="stockStat">📦<b id="stock">0</b></div>
+    <div class="stat" id="clockStat">🕘<b id="clock">D1 09:00</b></div>
+    <div id="boostBar"></div>
+    <div class="sp"></div>
+    <button id="salesBtn" aria-label="화주사 영업">📋<i></i></button>
+    <button id="mktBtn" aria-label="마케팅">📣<i></i></button>
+    <button id="menuBtn" aria-label="메뉴">⚙︎</button>
+  </header>
+  <div id="goal"><div id="goalText"></div><div class="gbar"><i id="goalFill"></i></div></div>
+  <div id="stage"><canvas id="cv"></canvas><div id="banner" class="hidden"></div></div>
+</div>
+<div id="sheet">
+  <div class="grab"></div>
+  <div id="sheetHead"><h3 id="sheetTitle"></h3><button id="sheetClose" aria-label="닫기">✕</button></div>
+  <div id="rows"></div>
+</div>
+<div id="ending" class="hidden">
+  <div class="box">
+    <h2>🌍 전 인류 커버 완료!</h2>
+    <p>82억 명의 주문을 다 보냄</p>
+    <div class="big" id="endTime"></div>
+    <p id="endBest"></p>
+    <p id="endStats"></p>
+    <button id="endContinue">무한 모드로 계속하기</button>
+    <button id="endNew">새 게임 (기록 도전)</button>
+  </div>
+</div>
+<div id="report" class="hidden">
+  <div class="box">
+    <h2 id="repTitle"></h2>
+    <div id="repBody"></div>
+    <button id="repayBtn"></button>
+    <button id="nextDay">다음 날 시작 ☀️</button>
+  </div>
+</div>
+<div id="menu" class="hidden">
+  <div class="box">
+    <h2>📦 다보냄</h2>
+    <p id="statsText"></p>
+    <button id="menuRepay"></button>
+    <button id="soundBtn"></button>
+    <button id="spinBtn"></button>
+    <button id="closeMenu">계속하기</button>
+    <button id="resetBtn">처음부터 다시</button>
+  </div>
+</div>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+// ═════ 목표: 전 인류의 주문 커버 ═════
+const WORLD = 8.2e9;                                     // 세계 인구 약 82억 명
+const STAGES = [
+  {name:'우리 동네', icon:'🏘️', goal:1e4},
+  {name:'서울',      icon:'🏙️', goal:9.4e6},
+  {name:'대한민국',  icon:'🇰🇷', goal:5.1e7},
+  {name:'아시아',    icon:'🌏', goal:4.7e9},
+  {name:'전 인류',   icon:'🌍', goal:WORLD},
+];
+const AUTO_BASE = 3000, AUTO_G = 3.1, AUTO_M = 1.35, STAGE_BOOST = 3; // 봇 시뮬레이션 튜닝(연동사·택배 단가·평점·단골·광고 포함): 보통 플레이 ~72분
+const AUTO_NAMES = ['포장 작업대', '핸드 스캐너', '컨베이어', '자동 포장기', '소터', 'AGV 로봇', '로봇 피킹', '다크 팩토리', '글로벌 풀필먼트'];
+const SCALE = 3;                 // 물량 배율: 주문 ×3, 건당 금액 ÷3, 원 한 바퀴 = 3건
+const UNIT_COST = 100, SAVE_KEY = 'dabonaettung-v1', TAU = Math.PI * 2;
+const OUT = '#3f3f46';
+
+// ═════ 데이터 ═════
+const CH = [
+  {id:'excel',    name:'엑셀/단건',     short:'엑셀',   color:'#14b8a6', unlock:0,     rate:0.12, price:800},
+  {id:'cafe24',   name:'카페24',        short:'카페24', color:'#3b82f6', unlock:2500,  rate:0.18, price:1000},
+  {id:'playauto', name:'플레이오토',     short:'플오',   color:'#8b5cf6', unlock:12000, rate:0.20, price:1000, st:1},
+  {id:'coupang',  name:'쿠팡',          short:'쿠팡',   color:'#ef4444', unlock:9000,  rate:0.30, price:1100, via:'playauto', st:1},
+  {id:'naver',    name:'네이버 스토어',  short:'네이버', color:'#22c55e', unlock:16000, rate:0.28, price:1200, via:'playauto', st:1},
+  {id:'gmarket',  name:'지마켓',        short:'G마켓',  color:'#f59e0b', unlock:25000, rate:0.26, price:1300, via:'playauto', st:2},
+  {id:'st11',     name:'11번가',        short:'11번가', color:'#ec4899', unlock:20000, rate:0.30, price:1100, via:'playauto', trait:'📦 볼륨형', st:2},
+  {id:'kakao',    name:'카카오 선물하기', short:'선물',  color:'#facc15', unlock:22000, rate:0.05, price:1500, via:'playauto', gift:true, trait:'🎁 평소 조용, 이벤트 땐 ×5', st:2},
+  {id:'musinsa',  name:'무신사',        short:'무신사', color:'#27272a', unlock:30000, rate:0.12, price:2400, via:'playauto', trait:'💎 고단가', st:2},
+  {id:'ohouse',   name:'오늘의집',      short:'오집',   color:'#06b6d4', unlock:35000, rate:0.18, price:2700, via:'playauto', size:2, trait:'🛋️ 대형 — 원 2바퀴에 1건', st:3},
+  {id:'shopee',   name:'쇼피 역직구',    short:'쇼피',   color:'#ea580c', unlock:40000, rate:0.22, price:2000, deadline:35, trait:'✈️ 고단가 · 마감 35초', st:3},
+  {id:'ably',     name:'에이블리',      short:'에이블리', color:'#e11d48', unlock:30000,  rate:0.40, price:700,  st:1, trait:'👗 볼륨형 · 저단가'},
+  {id:'kurly',    name:'컬리',          short:'컬리',   color:'#6d28d9', unlock:300000, rate:0.22, price:2200, st:2, deadline:30, urgent:0.35, trait:'🌙 새벽배송 · 마감 30초 · ⚡긴급 많음'},
+  {id:'olive',    name:'올리브영',      short:'올영',   color:'#65a30d', unlock:400000, rate:0.25, price:1500, st:2, evBoost:4, trait:'💄 이벤트 땐 주문 ×4'},
+  {id:'cm29',     name:'29CM',          short:'29CM',   color:'#475569', unlock:500000, rate:0.12, price:3000, st:2, trait:'💎 고단가 편집숍'},
+  {id:'tiktok',   name:'틱톡샵',        short:'틱톡',   color:'#db2777', unlock:5e6,    rate:0.50, price:1400, st:3, burst:true, trait:'📱 라이브: 30초마다 5초간 몰아치기'},
+  {id:'rakuten',  name:'라쿠텐',        short:'라쿠텐', color:'#b91c1c', unlock:8e6,    rate:0.25, price:2600, st:3, trait:'✈️ 일본 역직구 · 고단가'},
+  {id:'amazon',   name:'아마존',        short:'아마존', color:'#ca8a04', unlock:8e7,    rate:1.20, price:1200, st:4, trait:'🌍 초대형 볼륨 (막판 러시)'},
+];
+CH.forEach(c => { c.rate *= SCALE; c.price = Math.round(c.price / SCALE / 10) * 10; });
+const BRANDS = [
+  {name:'촉촉코스메틱', icon:'💄'},
+  {name:'냠냠푸드',     icon:'🍙', urgent:0.3},
+  {name:'쫀쫀어패럴',   icon:'👕'},
+  {name:'반짝가전',     icon:'📺', size:2},
+  {name:'꼬순펫',       icon:'🐶'},
+  {name:'몽글리빙',     icon:'🛋️', size:2},
+  {name:'쑥쑥키즈',     icon:'🧸'},
+  {name:'탄탄스포츠',   icon:'⚽'},
+  {name:'쫄깃베이커리', icon:'🥐', urgent:0.25},
+  {name:'반짝주얼리',   icon:'💍'},
+  {name:'뚝딱공구',     icon:'🔧', size:2},
+  {name:'폭신침구',     icon:'🛏️', size:2},
+  {name:'쭉쭉음료',     icon:'🥤'},
+  {name:'알록문구',     icon:'✏️'},
+  {name:'책읽는곰',     icon:'📚'},
+  {name:'게임천국',     icon:'🎮'},
+];
+const BOOSTS = {
+  coupon:  {name:'할인 쿠폰',    icon:'🎟️', mult:2, dur:30, cd:90,  base:3000, k:0.6, desc:'모든 채널 주문 ×2 · 30초'},
+  timedeal:{name:'타임딜',       icon:'⏰', mult:4, dur:20, cd:120, base:5000, k:0.8, desc:'레벨 제일 높은 채널 주문 ×4 · 20초', target:'top'},
+  live:    {name:'라이브커머스', icon:'📺', mult:6, dur:15, cd:150, base:8000, k:1.0, desc:'카페24 주문 ×6 · 15초', target:'cafe24'},
+};
+const EVENTS = [
+  {name:'블랙프라이데이', icon:'🛍️', mult:3,   dur:25},
+  {name:'명절 특수',      icon:'🎁', mult:2,   dur:40},
+  {name:'11.11 빅세일',   icon:'🔥', mult:2.5, dur:30},
+  {name:'라이브커머스 대박', icon:'📸', mult:5, dur:18, only:'cafe24'},
+  {name:'쿠팡 로켓 프로모션', icon:'🚀', mult:4, dur:22, only:'coupang'},
+];
+const MAX_WORKERS = 8, TRUCK_CAP = 8 * SCALE;
+
+// ═════ 하루 사이클 · 고정비 · 대출 ═════
+const DAY_SEC = 300, CUTOFFS = [15, 18];            // 5분 = 09:00~18:00, 집하 마감 15시·18시
+const freshToday = () => ({shipped:0, cancelled:0, late:0, revenue:0, stock:0, penalty:0, mkt:0});
+const wageOf = () => Math.round((8000 + 1500 * S.trainLv) * curN());      // 작업자 1인 일당
+const rentOf = () => Math.round((5000 + 3000 * S.capLv) * curN());        // 센터 임대료 (랙 확장할수록 ↑)
+const maintOf = () => Math.round(1000 * S.railLv * curN());             // 레일 설비 유지비
+const interestOf = () => Math.round(S.debt * 0.05); // 대출 이자 하루 5%
+const dailyCost = () => wageOf() * S.workers + rentOf() + maintOf() + interestOf() + adCost();
+const gameMin = () => 540 + S.dayT / DAY_SEC * 540;
+const clockStr = () => { const m = Math.min(1080, gameMin()); return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`; };
+function fresh(){
+  const ch = {};
+  CH.forEach(c => ch[c.id] = {lv: c.id === 'excel' ? 1 : 0, rep: 1});
+  return {v:3, rating:4.0, rGood:5, rBad:1, adLv:0, sound:true, autoRotLv:0, lineLv:0, railTier:0, carrier:0, st:0, autoLv:0, served:0, playTime:0, ended:false, money:3000, stock:45, cap:90, pend:[], pour:[], waveT:12, capLv:0, railLv:0, urgentLv:0, pickLv:0, shipLv:0, workers:0, trainLv:0,
+    autoIn:false, autoOn:true, spin:'ccw', ch, orders:[], nextId:1, shipped:0, cancelled:0, earned:0,
+    nextEvent:100, event:null, wp:[], lastIn:0, seenSheet:false, boosts:[], cd:{}, day:1, dayT:0, cutIdx:0, night:false, debt:0, today:freshToday(), report:null,
+    contracts:[], offers:[], salesLv:0, nextOffer:30, contractsDone:0, contractsFailed:0, ctId:1};
+}
+function load(){
+  try{
+    const s = JSON.parse(localStorage.getItem(SAVE_KEY));
+    if(s && s.ch){
+      if(!s.v || s.v < 2){            // 구버전 세이브 → 물량 ×3 스케일로 변환
+        s.cap = (s.cap || 30) * SCALE; s.stock = (s.stock || 0) * SCALE;
+        s.orders = []; s.offers = [];
+        (s.contracts || []).forEach(c => { c.rate *= SCALE; c.fee = Math.round(c.fee / SCALE / 10) * 10; c.limit *= 2; });
+        s.v = 2;
+      }
+      if(s.v < 3){                     // v2 → v3: 지금까지 출고한 만큼을 고객 수로 인정
+        s.served = s.shipped || 0; s.st = 0; while(s.st < 4 && s.served >= STAGES[s.st].goal) s.st++;
+        s.autoLv = 0; s.playTime = 0; s.ended = false; s.v = 3;
+      }
+      const f = fresh(); return Object.assign(f, s, {ch:Object.assign(f.ch, s.ch)});
+    }
+  }catch(e){}
+  return fresh();
+}
+let S = load();
+function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){} }
+
+// ═════ 파생 수치 ═════
+const chDef = id => CH.find(c => c.id === id);
+const railMult = () => 1 + 0.35 * S.railLv;
+// 작업자는 레일이 돌 때만 같이 포장 → 한 바퀴당 처리 건수를 늘려줌
+const W_PER = 0.25, W_TRAIN = 0.15;   // 작업자 1명당 한 바퀴 +0.25건, 교육 레벨당 작업자 몫 +15%
+const perRevBase = () => SCALE + S.workers * W_PER * (1 + W_TRAIN * S.trainLv);
+const RAILS = [
+  {name:'롤러 레일',            mult:1,   st:0, cost:0},
+  {name:'벨트 컨베이어',        mult:1.6, st:0, cost:37500},
+  {name:'스파이럴 레일',        mult:2.5, st:1, cost:375000},
+  {name:'크로스벨트 소터',      mult:4,   st:2, cost:3.75e6},
+  {name:'틸트트레이 고속 레일', mult:6.5, st:3, cost:3.75e7},
+  {name:'자기부상 레일',        mult:10,  st:4, cost:3.75e8},
+];
+const railTier = () => Math.min(RAILS.length - 1, S.railTier || 0);
+const railTierCost = () => { const nx = RAILS[railTier() + 1]; return nx ? r100(nx.cost * curN()) : Infinity; };
+const lines = () => 1 + (S.lineLv || 0);                       // 🛤️ 포장 라인 수
+const lineCost = () => r100(50000 * Math.pow(5, S.lineLv || 0) * curN());
+// 💸 돈 주고 켜는 처리 부스트 (가격은 현재 분당 매출에 비례)
+const RUSH_DUR = 12, RUSH_CD = 90, RUSH_MULT = 3, RUSH_SPEED = 1.5;
+const FEVER_DUR = 25, FEVER_CD = 60, FEVER_MULT = 1.5, FEVER_COMBO = 30;   // 30콤보 되면 자동 발동
+let rushT = 0, feverT = 0;
+const fever = () => feverT > 0;
+const rushCost = () => r100(Math.max(3000 * curN(), perMinute() * 0.6));
+const perRev = () => perRevBase() * RAILS[railTier()].mult * lines() * (rushT > 0 ? RUSH_MULT : 1) * (fever() ? FEVER_MULT : 1);
+const needRad = () => TAU / perRev();
+// 자동 회전 모터 (아시아 단계~): 손을 뗐을 때 최대 속도의 20/25/30%로 혼자 돎
+const AUTO_ROT = [0, 0.05, 0.08, 0.12];   // 손 뗐을 때 최대 속도의 5/8/12% (손으로 돌리는 게 훨씬 빠르게)
+const autoRotPct = () => AUTO_ROT[Math.min(3, S.autoRotLv || 0)];
+const autoRotCost = () => r100(5000 * Math.pow(4, S.autoRotLv || 0) * curN());
+// 관성(베어링): 손을 떼면 이 시간상수로 서서히 감속 — 레일 모터 레벨·새 레일로 길어짐
+const inertiaTau = () => 0.35 + 0.08 * S.railLv + 0.25 * railTier();
+const coastSec = () => inertiaTau() * Math.log(Math.max(1.01, maxRev() / 0.04));   // 최대 속도에서 거의 멈출 때까지 대략 몇 초
+const maxRev = () => (0.5 + 0.12 * S.railLv) * (rushT > 0 ? RUSH_SPEED : 1);   // 레일 최대 회전 속도 (바퀴/초)
+// 콤보: 손으로 연속 포장하면 쌓이고, 주문이 있는데 2.2초 동안 못 쌓으면 끊김
+const COMBO_GAP = 4;              // 콤보 = 연속으로 완성한 바퀴 수
+const comboBonus = () => Math.min(1, combo * 0.01);        // 콤보 1당 +1%, 최대 +100%
+const workerTime = () => 7 / (railMult() * SCALE * (1 + 0.25 * S.trainLv));
+// 💸 건당 수익: 택배 단가 협상(레벨당 +15%, 제한 없음) × 택배사 계약 등급
+const CARRIERS = [
+  {name:'동네 택배',      short:'택배', mult:1,   st:0, cost:0},
+  {name:'대형 택배사',    short:'대형', mult:1.5, st:1, cost:200000},
+  {name:'당일배송 계약',  short:'당일', mult:2.2, st:2, cost:2e6},
+  {name:'글로벌 특송',    short:'글로벌', mult:3.5, st:3, cost:2e7},
+];
+const carrier = () => CARRIERS[Math.min(CARRIERS.length - 1, S.carrier || 0)];
+const carrierCost = () => { const nx = CARRIERS[(S.carrier || 0) + 1]; return nx ? r100(nx.cost * curN()) : Infinity; };
+const shipMult = () => (1 + 0.15 * S.shipLv) * carrier().mult;
+const normalDeadline = () => 60 + 6 * S.pickLv;
+const urgentDeadline = () => 22 + 6 * S.urgentLv;
+function evMult(id){
+  let m = 1; const e = S.event;
+  if(e && e.phase === 'live'){
+    const d = EVENTS[e.i];
+    const cd = chDef(id);
+    if(cd.gift) m *= 5; else if(cd.evBoost) m *= cd.evBoost; else if(!d.only || d.only === id) m *= d.mult;
+  }
+  for(const b of S.boosts) if(!b.ch || b.ch === id) m *= BOOSTS[b.k].mult;
+  return m;
+}
+const perMinute = () => CH.reduce((s, c) => s + chRate(c, false) * c.price * 60, 0) * curN();
+const boostCost = k => r100(Math.max(BOOSTS[k].base * curN(), perMinute() * BOOSTS[k].k));
+function topChannel(){ return CH.filter(c => S.ch[c.id].lv > 0).sort((a, b) => S.ch[b.id].lv - S.ch[a.id].lv || b.rate - a.rate)[0]; }
+function boostLocked(k){ const t = BOOSTS[k].target; return t && t !== 'top' && !S.ch[t].lv; }
+function activateBoost(k){
+  const b = BOOSTS[k], cost = boostCost(k);
+  S.money -= cost; S.cd[k] = b.cd; S.today.mkt += cost;
+  const ch = b.target === 'top' ? topChannel().id : (b.target || null);
+  S.boosts.push({k, t:b.dur, ch});
+  say(`${b.icon} ${b.name}${ch ? ' · ' + chDef(ch).short : ''} 시작!`, '#db2777', 1.8);
+}
+// ⭐ 평점: 제때 출고하면 오르고 지연·취소가 쌓이면 내려감 → 모든 채널 주문 ×0.7~×1.5
+const ratingMult = () => Math.max(0.7, Math.min(1.5, 1 + ((S.rating || 4) - 4) * 0.5));
+// 📢 상시 광고: 레벨당 주문 +8%, 대신 매일 광고비가 고정비로 나감
+const AD_MAX = 10;
+const adMult = () => 1 + 0.08 * (S.adLv || 0);
+const adCost = () => Math.round((S.adLv || 0) * 6000 * curN());
+// 🔁 단골 재구매: 지금까지 받은 고객 수가 많을수록 기본 주문이 깔림 (로그 곡선으로 완만하게)
+const repeatRate = () => 0.3 * Math.log10(1 + (S.served || 0) / 500);
+function chRate(c, withEv = true){
+  const s = S.ch[c.id]; if(!s.lv) return 0;
+  const burst = c.burst ? (withEv ? ((S.playTime % 30) < 5 ? 6 : 0) : 1) : 1;   // 틱톡: 30초 중 5초만 ×6
+  return c.rate * (1 + 0.4 * (s.lv - 1)) * (0.35 + 0.65 * s.rep) * burst * ratingMult() * adMult() * (withEv ? evMult(c.id) : 1);
+}
+const r100 = v => Math.round(v / 100) * 100;
+function chCost(c){ const s = S.ch[c.id]; return s.lv ? r100((c.unlock || 1500) * 0.7 * Math.pow(1.6, s.lv - 1)) : c.unlock; }
+const capCost = () => r100(1500 * Math.pow(1.6, S.capLv));
+const railCost = () => r100(1500 * Math.pow(1.75, S.railLv));
+const urgentCost = () => r100(6000 * Math.pow(2, S.urgentLv));
+const pickCost = () => r100(3000 * Math.pow(1.8, S.pickLv));
+const shipCost = () => r100(5000 * Math.pow(1.7, S.shipLv) * curN());
+const hireCost = () => r100(2500 * Math.pow(1.65, S.workers));
+const trainCost = () => r100(4000 * Math.pow(1.8, S.trainLv));
+const curN = () => Math.pow(STAGE_BOOST, S.st) * Math.pow(AUTO_M, S.autoLv);   // 주문 1묶음 = 고객 n명
+const unitCost = () => UNIT_COST * curN();
+const autoCost = () => r100(AUTO_BASE * Math.pow(AUTO_G, S.autoLv));
+const autoName = lv => AUTO_NAMES[Math.min(AUTO_NAMES.length - 1, Math.floor(lv / 4))];
+const orderPay = o => Math.round(o.price * (o.n || 1) * shipMult());
+
+const fmtQ = x => x < 100 ? (Math.round(x * 10) / 10).toString() : fmtN(x);   // 한 바퀴 처리량용 (작으면 소수 1자리)
+function fmtN(n){                // 개수 (만·억·조)
+  n = Math.floor(n);
+  if(n >= 1e12) return (n / 1e12).toFixed(n >= 1e13 ? 0 : 1) + '조';
+  if(n >= 1e8) return (n / 1e8).toFixed(n >= 1e9 ? 0 : 1) + '억';
+  if(n >= 1e4) return (n / 1e4).toFixed(n >= 1e5 ? 0 : 1) + '만';
+  return n.toLocaleString('ko-KR');
+}
+function fmt(n){
+  n = Math.floor(n);
+  if(n >= 1e16) return '₩' + (n / 1e16).toFixed(n >= 1e17 ? 0 : 1) + '경';
+  if(n >= 1e12) return '₩' + (n / 1e12).toFixed(n >= 1e13 ? 0 : 1) + '조';
+  if(n >= 1e8) return '₩' + (n / 1e8).toFixed(n >= 1e9 ? 0 : 1) + '억';
+  if(n >= 1e5) return '₩' + (n / 1e4).toFixed(n >= 1e6 ? 0 : 1) + '만';
+  return '₩' + n.toLocaleString('ko-KR');
+}
+
+// ═════ 사운드: 음원 없이 Web Audio로 합성 (금고 다이얼 느낌) ═════
+const SFX = (() => {
+  let ac = null, master = null, noise = null, lastGrind = 0;
+  function ensure(){
+    if(!S.sound) return null;
+    if(!ac){
+      try{
+        ac = new (window.AudioContext || window.webkitAudioContext)();
+        master = ac.createGain(); master.gain.value = 0.55; master.connect(ac.destination);
+        noise = ac.createBuffer(1, Math.floor(ac.sampleRate * 0.3), ac.sampleRate);
+        const d = noise.getChannelData(0); for(let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      }catch(e){ ac = null; return null; }
+    }
+    if(ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function env(g, t, peak, attack, decay){
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+  }
+  function noiseHit(t, type, freq, q, peak, decay){
+    const s = ac.createBufferSource(); s.buffer = noise;
+    const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+    const g = ac.createGain(); env(g, t, peak, 0.002, decay);
+    s.connect(f).connect(g).connect(master); s.start(t, Math.random() * 0.2); s.stop(t + decay + 0.02);
+  }
+  function tone(t, type, f0, f1, peak, decay){
+    const o = ac.createOscillator(); o.type = type;
+    o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + decay);
+    const g = ac.createGain(); env(g, t, peak, 0.003, decay);
+    o.connect(g).connect(master); o.start(t); o.stop(t + decay + 0.02);
+  }
+  return {
+    unlock: ensure,
+    // 다이얼 딸깍: 짧고 건조한 금속 클릭
+    tick(){ if(!ensure()) return; const t = ac.currentTime;
+      noiseHit(t, 'bandpass', 3000 + Math.random() * 900, 9, 0.45, 0.025);
+      tone(t, 'square', 2400, 1800, 0.035, 0.012); },
+    // 잠금쇠 철컥: 금속 걸림 + 묵직한 쿵
+    clunk(){ if(!ensure()) return; const t = ac.currentTime;
+      noiseHit(t, 'bandpass', 1500, 4, 0.6, 0.05);
+      tone(t, 'sine', 170, 60, 0.55, 0.16);
+      noiseHit(t + 0.035, 'highpass', 4200, 1, 0.22, 0.03); },
+    // 모터 한계: 낮게 그르릉
+    grind(){ if(!ensure()) return; const nowT = performance.now(); if(nowT - lastGrind < 140) return; lastGrind = nowT;
+      const t = ac.currentTime;
+      const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 48 + Math.random() * 8;
+      const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 420;
+      const g = ac.createGain(); env(g, t, 0.18, 0.01, 0.13);
+      o.connect(f).connect(g).connect(master); o.start(t); o.stop(t + 0.16);
+      noiseHit(t, 'lowpass', 600, 1, 0.12, 0.12); },
+    // 콤보 띵: 콤보가 오를수록 음이 높아짐
+    ding(step){ if(!ensure()) return; const t = ac.currentTime, f = 784 * Math.pow(2, Math.min(step, 12) / 12);
+      tone(t, 'sine', f, f * 0.995, 0.28, 0.45); tone(t, 'sine', f * 2, f * 2, 0.07, 0.25); },
+  };
+})();
+let tickAcc = 0;
+
+// ═════ 연출 상태 ═════
+const fx = {boxes:[], texts:[], slips:[], flyers:[], poofs:[], pallets:[], flash:0, pop:0, chPulse:{}, inTruck:0,
+  truck:{load:0, state:'idle', t:0}};
+let railAngle = 0, manual = 0, hintMsg = '', hintT = 0, playerBob = 0;
+let omega = 0, omegaDir = -1, usedRad = 0, railMoveT = 0, railBudget = 0, overheat = 0, rawRad = 0, spd = 0, gaugeVis = 0, combo = 0, comboT = 0, comboPop = 0;
+let W = 0, H = 0, cx = 0, cy = 0, R = 50, now = 0;
+const KY = 0.6;   // 시점 기울기: 레일·군중을 납작한 타원으로 (위에서 비스듬히 내려다보는 느낌)
+let exitTheta = Math.PI / 2;   // 타원 위에서 출구 방향 (매개변수 각도)
+const L = {};
+
+// ═════ 게임 로직 ═════
+// ── 화주사 계약 ──
+const salesSlots = () => 2 + S.salesLv;
+const SALES_MAX = 8;   // 영업팀 최대 레벨 → 동시 계약 최대 10곳
+const salesCost = () => r100(8000 * Math.pow(2, S.salesLv) * curN());
+const offerMax = () => 3 + Math.floor(S.salesLv / 2);
+function makeOffer(){
+  const used = new Set([...S.contracts, ...S.offers].map(o => o.b));
+  const free = BRANDS.map((b, i) => i).filter(i => !used.has(i));
+  if(!free.length) return null;
+  const bi = free[Math.floor(Math.random() * free.length)], b = BRANDS[bi];
+  const lvl = S.contractsDone, strict = Math.random() < 0.35;
+  return {id:S.ctId++, b:bi, strict,
+    rate:(0.08 + Math.min(0.4, lvl * 0.03)) * (strict ? 1.4 : 1) * (b.size ? 0.6 : 1) * SCALE,
+    fee:Math.round((300 + lvl * 60) * (strict ? 1.8 : 1) * (b.size ? 1.5 : 1) / SCALE / 10) * 10,
+    dur:150 + Math.floor(Math.random() * 4) * 30, limit:strict ? 2 : 6,
+    urgent:b.urgent || 0.05, size:b.size || 1, exp:60};
+}
+function signContract(of){
+  S.offers = S.offers.filter(o => o !== of);
+  S.contracts.push(Object.assign({}, of, {t:of.dur, cancels:0, shipped:0}));
+  say(`${BRANDS[of.b].icon} ${BRANDS[of.b].name} 계약!`, '#0f766e', 1.6);
+}
+function endContract(ct, ok){
+  S.contracts = S.contracts.filter(c => c !== ct);
+  const b = BRANDS[ct.b];
+  if(ok){
+    const bonus = r100((2000 + ct.shipped * ct.fee * 0.5) * curN());
+    S.money += bonus; S.earned += bonus; S.contractsDone++;
+    say(`${b.icon} 계약 완료! 보너스 +${fmt(bonus)}`, '#16a34a', 2);
+  } else {
+    S.contractsFailed++;
+    const p = chargePenalty(ct, 2, true);
+    say(`${b.icon} ${b.name} 계약 해지! 위약금 -${fmt(p)}`, '#dc2626', 2.4);
+    fx.flash = 0.6;
+  }
+}
+function strike(ct){
+  ct.cancels++;
+  if(ct.cancels > ct.limit + 2) endContract(ct, false);      // 위약금 구간도 넘김 → 해지
+  else if(ct.cancels > ct.limit) chargePenalty(ct, 1);       // 허용 초과 → 위약금
+}
+// ⏰ 택배 집하 마감: 남은 물량은 지연(단가 -30%), 화주사 물량이 남았으면 SLA 위반 1회
+function doCutoff(h){
+  let late = 0; const hit = new Set();
+  for(const o of S.orders){
+    if(!o.late){ o.late = true; o.price = Math.round(o.price * 0.7); late++; }
+    if(o.br) hit.add(o.br);
+  }
+  S.today.late += late;
+  for(const id of hit){ const ct = S.contracts.find(c => c.id === id); if(ct) strike(ct); }
+  if(fx.truck.state === 'idle'){ fx.truck.state = 'leave'; fx.truck.t = 0; }
+  say(late ? `⏰ ${h}:00 집하 마감! 미출고 ${late}건 지연 (단가 -30%)` : `⏰ ${h}:00 집하 마감! 전량 출고 👍`, late ? '#dc2626' : '#16a34a', 2.6);
+  if(late) fx.flash = 0.5;
+}
+// 🌙 18:00 정산: 고정비 차감, 모자라면 운영자금 대출
+function endDay(){
+  const t = S.today, wages = wageOf() * S.workers, rent = rentOf(), maint = maintOf(), interest = interestOf(), ads = adCost();
+  const fixed = wages + rent + maint + interest + ads;
+  S.money -= fixed;
+  let loan = 0;
+  if(S.money < 0){ loan = -S.money; S.debt += loan; S.money = 0; }
+  S.report = Object.assign({day:S.day, ads, rating:S.rating, wages, workers:S.workers, rent, maint, interest, loan, debt:S.debt,
+    net:t.revenue - t.stock - t.penalty - t.mkt - fixed}, t);
+  S.night = true; drag = null;
+  closeSheet(); save(); showReport();
+}
+function showReport(){
+  const r = S.report; if(!r) return;
+  $('repTitle').textContent = `🌙 D${r.day} 정산 (18:00)`;
+  const row = (k, v, cls = '') => `<tr class="${cls}"><td>${k}</td><td>${v}</td></tr>`;
+  $('repBody').innerHTML = `<table>
+    ${row('📦 출고', r.shipped.toLocaleString('ko-KR') + '건')}
+    ${row('❌ 취소 · ⏰ 지연', `${r.cancelled}건 · ${r.late}건`)}
+    ${row('💰 매출', '+' + fmt(r.revenue), 'plus')}
+    ${row('📥 입고비', '-' + fmt(r.stock), 'minus')}
+    ${r.mkt ? row('📣 마케팅·부스트', '-' + fmt(r.mkt), 'minus') : ''}
+    ${r.penalty ? row('📋 위약금', '-' + fmt(r.penalty), 'minus') : ''}
+    ${row(`👷 인건비 (${r.workers}명)`, '-' + fmt(r.wages), 'minus')}
+    ${row('🏢 임대료', '-' + fmt(r.rent), 'minus')}
+    ${r.maint ? row('🔧 설비 유지비', '-' + fmt(r.maint), 'minus') : ''}
+    ${r.ads ? row('📢 광고비', '-' + fmt(r.ads), 'minus') : ''}
+    ${r.rating ? row('⭐ 평점', r.rating.toFixed(1)) : ''}
+    ${r.interest ? row('🏦 대출 이자', '-' + fmt(r.interest), 'minus') : ''}
+    ${row('오늘 손익', (r.net >= 0 ? '+' : '-') + fmt(Math.abs(r.net)), 'sum ' + (r.net >= 0 ? 'plus' : 'minus'))}
+  </table>
+  ${r.loan ? `<p class="note" style="color:#dc2626">⚠️ 고정비가 모자라 운영자금 ${fmt(r.loan)}을 대출했어요.</p>` : ''}
+  ${S.debt ? `<p class="note">대출 잔액 ${fmt(S.debt)} · 내일 이자 ${fmt(interestOf())}</p>` : ''}
+  <p class="note">내일 고정비 예상: ${fmt(dailyCost())}</p>`;
+  repayLabel();
+  $('report').classList.remove('hidden');
+}
+function repayLabel(){
+  const amt = Math.min(S.money, S.debt);
+  for(const id of ['repayBtn', 'menuRepay']){
+    const b = $(id); b.classList.toggle('hidden', !(S.debt > 0));
+    b.textContent = amt > 0 ? `🏦 대출 상환 ${fmt(amt)} (잔액 ${fmt(S.debt)})` : `🏦 대출 잔액 ${fmt(S.debt)} — 상환할 돈 없음`;
+    b.disabled = !(amt > 0);
+  }
+}
+function repay(){
+  const amt = Math.min(S.money, S.debt); if(amt <= 0) return;
+  S.money -= amt; S.debt -= amt; repayLabel(); refresh(); save();
+}
+function nextDay(){
+  S.day++; S.dayT = 0; S.cutIdx = 0; S.night = false; S.today = freshToday(); S.report = null;
+  $('report').classList.add('hidden');
+  say(`☀️ D${S.day} 출근! 오늘 고정비 ${fmt(dailyCost())}`, '#d97706', 2.2);
+  save();
+}
+const fmtTime = s => { s = Math.floor(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60; return (h ? h + '시간 ' : '') + m + '분 ' + String(ss).padStart(2, '0') + '초'; };
+const BEST_KEY = 'dabonaettung-best';
+function finishGame(){
+  if(S.ended) return;
+  S.ended = true;
+  let best = null; try{ best = JSON.parse(localStorage.getItem(BEST_KEY)); }catch(e){}
+  const isNew = !best || S.playTime < best.time;
+  if(isNew) try{ localStorage.setItem(BEST_KEY, JSON.stringify({time:S.playTime, day:S.day})); }catch(e){}
+  $('endTime').textContent = fmtTime(S.playTime);
+  $('endBest').textContent = isNew ? '🏆 최고 기록 갱신!' : `최고 기록 ${fmtTime(best.time)}`;
+  $('endStats').innerHTML = `D${S.day} · 최고 콤보 ${S.maxCombo || 0} · 화주사 완료 ${S.contractsDone} / 해지 ${S.contractsFailed}<br>총 매출 ${fmt(S.earned)} · 작업자 ${S.workers}명 · ${autoName(S.autoLv)} Lv.${S.autoLv}`;
+  fx.confetti = 6; drag = null; save();
+  $('ending').classList.remove('hidden');
+}
+const penaltyOf = ct => r100((1000 + ct.fee * SCALE * 4) * curN());
+function chargePenalty(ct, mult, silent){
+  const p = penaltyOf(ct) * mult;
+  S.money = Math.max(0, S.money - p);       // 돈은 0 밑으로 안 내려감
+  S.penalties = (S.penalties || 0) + p; S.today.penalty += p;
+  if(!silent){
+    say(`${BRANDS[ct.b].icon} SLA 위반 · 위약금 -${fmt(p)}`, '#ea580c', 1.8);
+    fx.flash = 0.35;
+  }
+  return p;
+}
+// 중앙 알림: 동시에 여러 개면 아래로 줄 세워서 안 겹치게
+function say(text, color, life){
+  const n = fx.texts.filter(t => t.c && t.life > 0.3).length;
+  fx.texts.push({x:cx, y:cy - R * 2.6 + n * 20, text, color, life, c:true});
+}
+const mmss = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+
+function spawn(c, ct){
+  const urgent = ct ? Math.random() < ct.urgent : c.urgent ? Math.random() < c.urgent : (S.ch.playauto.lv > 0 && Math.random() < 0.1);
+  const max = urgent ? urgentDeadline() : c.deadline ? c.deadline + 2 * S.pickLv : normalDeadline();
+  S.orders.push({id:S.nextId++, n:Math.max(1, Math.round(curN())), ch:c.id, t:max, max, urgent, size:(ct && ct.size > 1) ? ct.size : (c.size || 1),
+    br:ct ? ct.id : 0, price:Math.round(c.price * (urgent ? 2.5 : 1)) + (ct ? ct.fee : 0)});
+  fx.chPulse[c.id] = 1;
+  const p = chPos[c.id], q = L.pick && {x:L.pick.x + L.pick.w / 2, y:L.pick.y + L.pick.h * 0.45};
+  if(p && q && fx.slips.length < 24) fx.slips.push({x0:p.x, y0:p.y, x1:q.x, y1:q.y, t:0, color:c.color});
+}
+function playerTarget(){
+  if(S.stock <= 0) return null;
+  let best = null;
+  for(const o of S.orders){
+    if(o.urgent){ if(!best || !best.urgent || o.t < best.t) best = o; }
+    else if(!best) best = o;
+  }
+  return best;
+}
+function complete(o, x, y, byHand, quiet){
+  const i = S.orders.indexOf(o); if(i < 0 || S.stock <= 0) return false;
+  S.orders.splice(i, 1);
+  const a = ants.get(o.id);
+  if(a){ batchDots += 1; ants.delete(o.id); if(!a.hidden) fx.flyers.push({x:a.x, y:a.y, tx:x, ty:y, t:0, color:o.urgent ? '#ef4444' : chDef(o.ch).color}); }
+  else {                                   // 점 무리는 포장대(중앙)로 걸어가서 사라짐
+    const c = crowds.get(o.id);
+    if(c){ crowds.delete(o.id); leaving.push({c, t:0, urgent:o.urgent, ch:o.ch}); batchDots += c.k; }
+    else batchDots += 1;
+  }
+  const pay = Math.round(orderPay(o) * (byHand ? 1 + comboBonus() : 1));
+  S.stock--; S.money += pay; S.earned += pay; S.shipped++;
+  S.today.shipped++; S.today.revenue += pay; S.served += (o.n || 1);
+  if(o.overdue) S.rBad += 0.5; else S.rGood += 1;
+  const s = S.ch[o.ch]; s.rep = Math.min(1, s.rep + 0.02);
+  if(o.br){ const ct = S.contracts.find(c => c.id === o.br); if(ct) ct.shipped++; }
+  if(!quiet){
+    fx.boxes.push({x, y, t:0});
+    fx.texts.push({x, y:y - 24, text:'+' + fmt(pay), color:o.urgent ? '#dc2626' : '#16a34a', life:1});
+  }
+  return pay;
+}
+function buyStock(n){
+  n = Math.min(n, S.cap - S.stock, Math.floor(S.money / unitCost()));
+  if(n <= 0) return 0;
+  S.money -= n * unitCost(); S.stock += n; S.lastIn = n; S.today.stock += n * unitCost();
+  fx.inTruck = 2.2;
+  if(fx.pallets.length < 3) fx.pallets.push({t:0});
+  return n;
+}
+function workerPos(i){
+  const a = -Math.PI / 2 + (i + 0.5) * (TAU / MAX_WORKERS);
+  const r = R * 2.75;
+  return {x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r * KY};
+}
+
+let autoTimer = 0, pourAcc = 0, lateAcc = 0, lateTimer = 0;
+const OVERDUE_SEC = 240;   // 지연 후 고객 취소까지
+const WAVE_SEC = 12;
+function update(dt){
+  S.playTime += dt;
+  while(S.st < STAGES.length && S.served >= STAGES[S.st].goal){
+    const done = STAGES[S.st];
+    S.st++;
+    if(S.st >= STAGES.length){ finishGame(); break; }
+    const nx = STAGES[S.st];
+    say(`🎉 ${done.icon} ${done.name} 커버 완료!`, '#7c3aed', 3);
+    say(`${nx.icon} ${nx.name} 진출 · 물량 단위 ×${STAGE_BOOST}`, '#7c3aed', 3);
+    fx.confetti = 2.5;
+    const opened = CH.filter(c => c.st === S.st).map(c => c.name);
+    if(opened.length) say(`🔓 새 채널: ${opened.join(', ')}`, '#0f766e', 3);
+    if(S.st === 1) say('📋 화주사 영업이 시작돼요', '#0f766e', 3);
+  }
+  const mr = maxRev() * TAU;
+  railBudget = Math.min(railBudget + mr * dt, mr * 0.2);
+  overheat = Math.max(0, overheat - dt * 1.2);
+  railMoveT = Math.max(0, railMoveT - dt);
+  if(rushT > 0){ rushT = Math.max(0, rushT - dt); if(rushT === 0) say('⚡ 러시 아워 종료', '#64748b', 1.4); }
+  if(feverT > 0){ feverT = Math.max(0, feverT - dt); if(feverT === 0) say('🔥 피버 종료', '#64748b', 1.4); }
+  if(dt > 0){ const inst = rawRad / dt / TAU; spd += (inst - spd) * Math.min(1, dt * 6); rawRad = 0; }
+  if(drag){ if(dt > 0) omega += (usedRad / dt - omega) * Math.min(1, dt * 8); }
+  else if(omega > 0){
+    // 🌀 관성 회전: 손 뗀 속도로 계속 돌다가 서서히 멈춤 (포장·딸깍·콤보 유지)
+    omega = Math.min(omega, maxRev() * TAU) * Math.exp(-dt / inertiaTau());
+    if(omega < 0.04 * TAU) omega = 0;
+    else {
+      const r = omega * dt;
+      tickAcc += r; let tk = 0;
+      while(tickAcc >= TAU / 24){ tickAcc -= TAU / 24; if(tk++ < 1) SFX.tick(); }
+      packRotate(r, omegaDir, true);
+      if(combo > 0) comboT = Math.max(comboT, 0.5);
+    }
+  }
+  usedRad = 0;
+  gaugeVis = drag ? 1 : Math.max(0, gaugeVis - dt * 1.5);
+  comboPop = Math.max(0, comboPop - dt * 5);
+  if(combo > 0 && S.orders.length){
+    comboT -= dt;
+    if(comboT <= 0){
+      if(combo >= 10) say(`💥 콤보 끊김! (${combo}콤보)`, '#64748b', 1.4);
+      combo = 0;
+    }
+  }
+  S.dayT += dt;
+  if(S.cutIdx < CUTOFFS.length && gameMin() >= CUTOFFS[S.cutIdx] * 60){
+    const h = CUTOFFS[S.cutIdx++];
+    doCutoff(h);
+    if(h === 18){ endDay(); return; }
+  }
+  for(const c of CH){
+    const exp = chRate(c) * dt;
+    if(exp <= 0) continue;
+    let n = Math.floor(exp); if(Math.random() < exp - n) n++;
+    while(n--) S.pend.push({ch:c.id, br:0});
+  }
+  {  // 🔁 단골 재구매: 연동된 채널 중 하나로 들어옴
+    const unl0 = CH.filter(c => S.ch[c.id].lv > 0);
+    const exp = repeatRate() * ratingMult() * dt;
+    let n = Math.floor(exp); if(Math.random() < exp - n) n++;
+    while(n-- > 0 && unl0.length) S.pend.push({ch:unl0[Math.floor(Math.random() * unl0.length)].id, br:0, rep:1});
+  }
+  {  // ⭐ 평점: 최근 성적(제때 출고 vs 지연·취소)을 천천히 따라감
+    const decay = Math.exp(-dt / 120);
+    S.rGood *= decay; S.rBad *= decay;
+    const ratio = S.rGood / (S.rGood + S.rBad + 1e-6);
+    const target = 3.0 + 2.0 * ratio;
+    S.rating += (target - S.rating) * Math.min(1, dt / 25);
+  }
+  let newlyLate = 0;
+  for(let i = S.orders.length - 1; i >= 0; i--){
+    const o = S.orders[i]; o.t -= dt;
+    // 마감(60초)을 넘기면 사라지지 않고 ⏰지연으로 남아 계속 쌓임 → 그 뒤 4분 더 지나면 고객 취소
+    if(o.t <= 0 && !o.overdue){
+      o.overdue = true; o.t = o.max = OVERDUE_SEC;
+      if(!o.late){ o.late = true; o.price = Math.round(o.price * 0.7); S.today.late++; }
+      const s = S.ch[o.ch]; s.rep = Math.max(0.2, s.rep - 0.02);
+      if(o.br){ const ct = S.contracts.find(c => c.id === o.br); if(ct) strike(ct); }
+      S.rBad += 1;
+      newlyLate++;
+      continue;
+    }
+    if(o.t <= 0){
+      const a = ants.get(o.id);
+      const p = a && !a.hidden ? {x:a.x, y:a.y} : (crowdPos(o) || {x:L.pick.x + L.pick.w / 2, y:L.pick.y + L.pick.h / 2});
+      ants.delete(o.id);
+      S.orders.splice(i, 1); S.cancelled++; S.today.cancelled++; S.rBad += 2;
+      const s = S.ch[o.ch]; s.rep = Math.max(0.2, s.rep - 0.05);
+      fx.poofs.push({x:p.x, y:p.y, t:0});
+      fx.texts.push({x:p.x, y:p.y - 14, text:chDef(o.ch).short + ' 취소!', color:'#dc2626', life:1.4});
+      fx.flash = 0.3;
+    }
+  }
+  lateAcc += newlyLate; lateTimer -= dt;
+  if(lateTimer <= 0 && lateAcc > 0){
+    fx.texts.push({x:cx, y:cy + R * 2.55, text:`⏰ 지연 +${fmtN(lateAcc)}묶음`, color:'#b45309', life:1.6});
+    lateAcc = 0; lateTimer = 2;
+  }
+  // 자동 회전 모터 방향 = 회전 설정 방향
+  const idleDir = S.spin === 'cw' ? 1 : -1;
+  if(S.autoRotLv && !drag && omega < maxRev() * TAU * autoRotPct()) packRotate(maxRev() * TAU * autoRotPct() * dt, idleDir, false);   // 자동 회전 모터 (손 놓으면 레일은 멈춤)
+  // 📥 주문 수집: 주기마다 쌓인 주문을 한꺼번에 쏟아냄
+  S.waveT -= dt;
+  if(S.waveT <= 0){
+    S.waveT = WAVE_SEC;
+    if(S.pend.length){ say(`📥 주문 수집! ${S.pend.length}건 쏟아짐`, '#2563eb', 1.6); S.pour.push(...S.pend); S.pend = []; }
+  }
+  pourAcc += dt * 45;
+  while(pourAcc >= 1 && S.pour.length){
+    pourAcc -= 1;
+    const e = S.pour.shift(), c = chDef(e.ch);
+    spawn(c, e.br ? S.contracts.find(x => x.id === e.br) : null);
+  }
+  if(!S.pour.length) pourAcc = 0;
+  // 화주사 물량 유입 + 계약 타이머 + 영업 제안
+  const unl = CH.filter(c => S.ch[c.id].lv > 0);
+  for(const ct of S.contracts.slice()){
+    const c = unl[Math.floor(Math.random() * unl.length)];
+    if(Math.random() < ct.rate * evMult(c.id) * dt) S.pend.push({ch:c.id, br:ct.id});
+    ct.t -= dt;
+    if(ct.t <= 0) endContract(ct, true);
+  }
+  S.offers.forEach(o => o.exp -= dt); S.offers = S.offers.filter(o => o.exp > 0);
+  if(S.st >= 1){
+    S.nextOffer -= dt;
+    if(S.nextOffer <= 0){
+      S.nextOffer = (35 + Math.random() * 30) / (1 + 0.15 * S.salesLv);   // 영업팀이 클수록 제안이 자주 옴
+      if(S.offers.length < offerMax()){ const of = makeOffer(); if(of){ S.offers.push(of); say('📋 새 계약 제안 도착!', '#0f766e', 1.8); } }
+    }
+  }
+  S.boosts.forEach(b => b.t -= dt); S.boosts = S.boosts.filter(b => b.t > 0);
+  for(const k in S.cd) S.cd[k] = Math.max(0, S.cd[k] - dt);
+  autoTimer += dt;
+  if(autoTimer > 1){ autoTimer = 0; if(S.autoIn && S.autoOn && S.stock <= S.cap * 0.35) buyStock(S.cap); }
+  if(!S.event){
+    S.nextEvent -= dt;
+    if(S.nextEvent <= 0){
+      const ok = EVENTS.map((e, i) => i).filter(i => !EVENTS[i].only || S.ch[EVENTS[i].only].lv > 0);
+      S.event = {i: ok[Math.floor(Math.random() * ok.length)], phase:'warn', t:12};
+    }
+  } else {
+    S.event.t -= dt;
+    if(S.event.t <= 0){
+      if(S.event.phase === 'warn'){ S.event.phase = 'live'; S.event.t = EVENTS[S.event.i].dur; }
+      else { S.event = null; S.nextEvent = 80 + Math.random() * 70; }
+    }
+  }
+  // 연출 타이머
+  fx.flash = Math.max(0, fx.flash - dt);
+  fx.pop = Math.max(0, fx.pop - dt * 4);
+  fx.inTruck = Math.max(0, fx.inTruck - dt);
+  playerBob = Math.max(0, playerBob - dt * 3);
+  hintT = Math.max(0, hintT - dt);
+  for(const k in fx.chPulse) fx.chPulse[k] = Math.max(0, fx.chPulse[k] - dt * 3);
+  fx.slips.forEach(s => s.t += dt * 1.5); fx.slips = fx.slips.filter(s => s.t < 1);
+  fx.flyers.forEach(f => f.t += dt * 4); fx.flyers = fx.flyers.filter(f => f.t < 1);
+  updateAnts(dt);
+  updateDots(dt);
+  updateOutflow(dt);
+  fx.poofs.forEach(p => p.t += dt * 2); fx.poofs = fx.poofs.filter(p => p.t < 1);
+  fx.pallets.forEach(p => p.t += dt * 0.7); fx.pallets = fx.pallets.filter(p => p.t < 1);
+  fx.boxes.forEach(b => b.t += dt * 1.5);
+  const arrived = fx.boxes.filter(b => b.t >= 1).length;
+  fx.boxes = fx.boxes.filter(b => b.t < 1);
+  const tk = fx.truck;
+  tk.load += arrived;
+  if(tk.state === 'idle' && tk.load >= TRUCK_CAP){ tk.state = 'leave'; tk.t = 0; }
+  else if(tk.state === 'leave'){ tk.t += dt; if(tk.t > 0.9){ tk.state = 'arrive'; tk.t = 0; tk.load = Math.min(TRUCK_CAP, Math.max(0, tk.load - TRUCK_CAP)); } }
+  else if(tk.state === 'arrive'){ tk.t += dt; if(tk.t > 0.7){ tk.state = 'idle'; } }
+  fx.texts.forEach(t => { t.life -= dt; t.y -= dt * 28; });
+  fx.texts = fx.texts.filter(t => t.life > 0);
+}
+
+// ═════ 레이아웃 ═════
+const cv = $('cv'), ctx = cv.getContext('2d');
+let dpr = 1, landscape = false, bg = null;
+function layout(){
+  const p = 8;
+  landscape = W > H * 1.15 && W >= 680;
+  if(landscape){
+    const colW = Math.min(104, W * 0.1);
+    L.channels = {x:p, y:p, w:colW, h:H - p * 2};
+    const c2x = p * 2 + colW, c2w = Math.min(200, W * 0.17), av = H - p * 4;
+    L.inbound = {x:c2x, y:p, w:c2w, h:av * 0.27};
+    L.rack = {x:c2x, y:L.inbound.y + L.inbound.h + p, w:c2w, h:av * 0.33};
+    L.pick = {x:c2x, y:L.rack.y + L.rack.h + p, w:c2w, h:H - p - (L.rack.y + L.rack.h + p)};
+    const ow = Math.min(150, W * 0.14);
+    L.out = {x:W - p - ow, y:p, w:ow, h:H - p * 2};
+    const px = c2x + c2w + p;
+    L.pack = {x:px, y:p, w:L.out.x - p - px, h:H - p * 2};
+  } else {
+    L.channels = {x:p, y:p, w:W - p * 2, h:58};
+    const y2 = p * 2 + 58, h2 = Math.max(85, Math.min(120, H * 0.15)), tw = W - p * 4;
+    L.inbound = {x:p, y:y2, w:tw * 0.27, h:h2};
+    L.rack = {x:L.inbound.x + L.inbound.w + p, y:y2, w:tw * 0.33, h:h2};
+    L.pick = {x:L.rack.x + L.rack.w + p, y:y2, w:W - p - (L.rack.x + L.rack.w + p), h:h2};
+    const oh = Math.max(78, Math.min(104, H * 0.13));
+    L.out = {x:p, y:H - p - oh, w:W - p * 2, h:oh};
+    const py = y2 + h2 + p;
+    L.pack = {x:p, y:py, w:W - p * 2, h:L.out.y - p - py};
+  }
+  cx = L.pack.x + L.pack.w / 2; cy = L.pack.y + L.pack.h / 2 + 6;
+  R = Math.max(20, Math.min(78, Math.min(L.pack.w, L.pack.h - 30) / 6.4));
+  buildSlots();
+  buildDotSlots();
+  buildBg();
+}
+const ZONES = [
+  {k:'channels', sheet:'channel', fill:'#dcf5ec', label:'🛒 주문'},
+  {k:'inbound',  sheet:'stock',   fill:'#ece7fd', label:'📥 입하'},
+  {k:'rack',     sheet:'stock',   fill:'#eef2f7', label:'🗄️ 적치'},
+  {k:'pick',     sheet:'pick',    fill:'#ffece2', label:'🧺 피킹'},
+  {k:'pack',     sheet:'pack',    fill:'#f1f1f0', label:'📦 패킹 ⚙︎'},
+  {k:'out',      sheet:'out',     fill:'#ece7fd', label:'🚚 출고'},
+];
+function buildBg(){
+  bg = document.createElement('canvas');
+  bg.width = cv.width; bg.height = cv.height;
+  const b = bg.getContext('2d'); b.setTransform(dpr, 0, 0, dpr, 0, 0);
+  b.fillStyle = '#e4e6eb'; b.fillRect(0, 0, W, H);
+  b.strokeStyle = '#d9dce2'; b.lineWidth = 1;
+  for(let x = 0; x < W; x += 28){ b.beginPath(); b.moveTo(x, 0); b.lineTo(x, H); b.stroke(); }
+  for(let y = 0; y < H; y += 28){ b.beginPath(); b.moveTo(0, y); b.lineTo(W, y); b.stroke(); }
+  for(const z of ZONES){
+    const r = L[z.k];
+    pathRR(b, r.x, r.y, r.w, r.h, 14); b.fillStyle = z.fill; b.fill();
+    b.setLineDash([10, 7]); b.lineWidth = 3; b.strokeStyle = '#facc15'; b.stroke(); b.setLineDash([]);
+  }
+  // 패킹존 바닥 원형 매트
+  b.fillStyle = '#fbfbfa';
+  b.beginPath(); b.ellipse(cx, cy, R * 3.25, R * 3.0, 0, 0, TAU); b.fill();
+}
+
+// ═════ 그리기 도우미 ═════
+function pathRR(c, x, y, w, h, r){
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
+  c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+}
+const rr = (x, y, w, h, r) => pathRR(ctx, x, y, w, h, r);
+function shade(hex, a){
+  const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  if(a > 0){ r += (255 - r) * a; g += (255 - g) * a; b += (255 - b) * a; } else { r *= 1 + a; g *= 1 + a; b *= 1 + a; }
+  return `rgb(${r | 0},${g | 0},${b | 0})`;
+}
+function shadow(x, y, w){ ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.beginPath(); ctx.ellipse(x, y, w, w * 0.32, 0, 0, TAU); ctx.fill(); }
+// 3/4 시점 블록: (xc, 바닥 y) 기준, 너비 w, 앞면 높이 h, 윗면 깊이 d
+function block(xc, yb, w, h, d, front, top, lw = 1.5){
+  const x = xc - w / 2, y = yb - h - d, rad = Math.min(5, w * 0.16);
+  ctx.lineWidth = lw; ctx.strokeStyle = OUT;
+  rr(x, y, w, h + d, rad); ctx.fillStyle = front; ctx.fill(); ctx.stroke();
+  rr(x, y, w, d, rad); ctx.fillStyle = top; ctx.fill(); ctx.stroke();
+}
+function cardboard(xc, yb, s){
+  block(xc, yb, s, s * 0.6, s * 0.38, '#d9a86c', '#efc993', Math.max(1, s * 0.05));
+  ctx.fillStyle = '#f8e7c4'; ctx.fillRect(xc - s * 0.09, yb - s * 0.98, s * 0.18, s * 0.38);
+}
+function tote(xc, yb, s, color, urgent){
+  block(xc, yb, s, s * 0.5, s * 0.32, color, shade(color, 0.45), Math.max(1, s * 0.06));
+  ctx.fillStyle = shade(color, -0.45);
+  rr(xc - s * 0.2, yb - s * 0.36, s * 0.4, s * 0.12, s * 0.06); ctx.fill();
+  if(urgent){ ctx.font = `${Math.round(s * 0.42)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('⚡', xc, yb - s * 0.66); }
+}
+// 2등신 작업자
+function chibi(x, yb, s, vest, hat, bob = 0, face = 1){
+  shadow(x, yb, s * 0.38);
+  const y = yb - bob;
+  ctx.lineWidth = Math.max(1.2, s * 0.06); ctx.strokeStyle = OUT;
+  rr(x - s * 0.3, y - s * 0.62, s * 0.6, s * 0.58, s * 0.2); ctx.fillStyle = vest; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fef9c3'; ctx.fillRect(x - s * 0.29, y - s * 0.38, s * 0.58, s * 0.08);
+  ctx.fillStyle = '#ffd9b8';
+  ctx.beginPath(); ctx.arc(x - s * 0.33, y - s * 0.3, s * 0.09, 0, TAU); ctx.arc(x + s * 0.33, y - s * 0.3, s * 0.09, 0, TAU); ctx.fill();
+  const hy = y - s * 0.9, hr = s * 0.34;
+  ctx.beginPath(); ctx.arc(x, hy, hr, 0, TAU); ctx.fillStyle = '#ffe1c6'; ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, hy - hr * 0.08, hr * 1.04, Math.PI, 0); ctx.closePath(); ctx.fillStyle = hat; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = shade(hat, -0.25); ctx.fillRect(x - hr * 1.2, hy - hr * 0.12, hr * 2.4, hr * 0.16);
+  if(face){
+    ctx.fillStyle = OUT;
+    ctx.beginPath(); ctx.arc(x - hr * 0.35, hy + hr * 0.3, hr * 0.1, 0, TAU); ctx.arc(x + hr * 0.35, hy + hr * 0.3, hr * 0.1, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(251,113,133,.45)';
+    ctx.beginPath(); ctx.ellipse(x - hr * 0.6, hy + hr * 0.55, hr * 0.17, hr * 0.1, 0, 0, TAU); ctx.ellipse(x + hr * 0.6, hy + hr * 0.55, hr * 0.17, hr * 0.1, 0, 0, TAU); ctx.fill();
+  }
+}
+function truck(x, yb, s, cabColor, load, label){
+  shadow(x, yb, s * 1.1);
+  ctx.lineWidth = Math.max(1.2, s * 0.05); ctx.strokeStyle = OUT;
+  rr(x - s * 1.05, yb - s * 0.95, s * 1.45, s * 0.8, s * 0.1); ctx.fillStyle = '#fff'; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = cabColor; ctx.fillRect(x - s * 1.04, yb - s * 0.42, s * 1.43, s * 0.1);
+  const n = Math.min(Math.floor(load / SCALE), 8);
+  for(let i = 0; i < n; i++){
+    const col = i % 4, row = Math.floor(i / 4);
+    ctx.fillStyle = '#d9a86c'; ctx.strokeStyle = '#a16207'; ctx.lineWidth = 1;
+    rr(x - s * 0.98 + col * s * 0.33, yb - s * 0.88 + row * s * 0.22, s * 0.28, s * 0.18, 2); ctx.fill(); ctx.stroke();
+  }
+  if(label && n < 5){ ctx.fillStyle = cabColor; ctx.font = `800 ${Math.round(s * 0.24)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, x - s * 0.32, yb - s * 0.62); }
+  ctx.strokeStyle = OUT; ctx.lineWidth = Math.max(1.2, s * 0.05);
+  rr(x + s * 0.42, yb - s * 0.72, s * 0.55, s * 0.6, s * 0.14); ctx.fillStyle = cabColor; ctx.fill(); ctx.stroke();
+  rr(x + s * 0.6, yb - s * 0.64, s * 0.3, s * 0.22, s * 0.06); ctx.fillStyle = '#bfdbfe'; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.arc(x + s * 0.92, yb - s * 0.24, s * 0.05, 0, TAU); ctx.fill();
+  for(const wx of [x - s * 0.7, x + s * 0.65]){
+    ctx.beginPath(); ctx.arc(wx, yb - s * 0.1, s * 0.15, 0, TAU); ctx.fillStyle = '#3f3f46'; ctx.fill();
+    ctx.beginPath(); ctx.arc(wx, yb - s * 0.1, s * 0.06, 0, TAU); ctx.fillStyle = '#d4d4d8'; ctx.fill();
+  }
+}
+function forklift(x, yb, s, carry, dir = 1){
+  shadow(x, yb, s * 0.6);
+  ctx.save(); ctx.translate(x, 0); ctx.scale(dir, 1);
+  ctx.lineWidth = Math.max(1, s * 0.05); ctx.strokeStyle = OUT;
+  ctx.fillStyle = '#71717a'; ctx.fillRect(s * 0.42, yb - s * 1.0, s * 0.07, s * 0.9);
+  ctx.fillRect(s * 0.42, yb - s * 0.12, s * 0.45, s * 0.06);
+  if(carry){
+    ctx.fillStyle = '#b45309'; ctx.fillRect(s * 0.46, yb - s * 0.2, s * 0.5, s * 0.08);
+    ctx.restore(); cardboard(x + dir * s * 0.71, yb - s * 0.2, s * 0.42); ctx.save(); ctx.translate(x, 0); ctx.scale(dir, 1);
+    ctx.lineWidth = Math.max(1, s * 0.05); ctx.strokeStyle = OUT;
+  }
+  rr(-s * 0.5, yb - s * 0.62, s * 0.9, s * 0.5, s * 0.1); ctx.fillStyle = '#facc15'; ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-s * 0.2, yb - s * 0.62); ctx.lineTo(-s * 0.2, yb - s * 1.05); ctx.lineTo(s * 0.3, yb - s * 1.05); ctx.lineTo(s * 0.3, yb - s * 0.62); ctx.stroke();
+  ctx.beginPath(); ctx.arc(s * 0.04, yb - s * 0.78, s * 0.14, 0, TAU); ctx.fillStyle = '#ffe1c6'; ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(s * 0.04, yb - s * 0.8, s * 0.15, Math.PI, 0); ctx.fillStyle = '#facc15'; ctx.fill(); ctx.stroke();
+  for(const wx of [-s * 0.3, s * 0.25]){ ctx.beginPath(); ctx.arc(wx, yb - s * 0.12, s * 0.13, 0, TAU); ctx.fillStyle = '#3f3f46'; ctx.fill(); }
+  ctx.restore();
+}
+function label(z, text, badge, warn){
+  ctx.font = '800 11px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  const w = ctx.measureText(text).width + 16, x = z.x + 6, y = z.y + 6;
+  rr(x, y, w, 20, 10); ctx.fillStyle = warn ? '#fee2e2' : '#fff'; ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = warn ? '#ef4444' : '#d4d4d8'; ctx.stroke();
+  ctx.fillStyle = warn ? '#b91c1c' : '#3f3f46'; ctx.fillText(text, x + 8, y + 10.5);
+  z.lab = {x, y, w, h:20};
+  if(badge){
+    const bx = x + w - 2, by = y + 1, sc = 1;
+    ctx.beginPath(); ctx.arc(bx, by, 7 * sc, 0, TAU); ctx.fillStyle = '#ef4444'; ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '900 10px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('!', bx, by + 0.5);
+  }
+}
+
+// ═════ 존별 그리기 ═════
+const chPos = {};
+function drawChannels(){
+  const z = L.channels;
+  // 연동한 채널 + 다음에 열 수 있는 채널 2개만 표시
+  // 채널이 많아져서: 레벨 높은 연동 채널 6개 + 다음에 열 채널 1개만 아이콘으로, 나머지는 +N
+  const on = CH.filter(c => S.ch[c.id].lv > 0).sort((a, b) => S.ch[b.id].lv - S.ch[a.id].lv || b.rate - a.rate);
+  const nextLocked = CH.find(c => !S.ch[c.id].lv && c.st <= S.st) || CH.find(c => !S.ch[c.id].lv);
+  const list = on.slice(0, 6).concat(nextLocked ? [nextLocked] : []);
+  const moreOn = Math.max(0, on.length - 6);
+  for(const k in chPos) delete chPos[k];
+  const pendCnt = {};
+  for(const e of S.pend) pendCnt[e.ch] = (pendCnt[e.ch] || 0) + 1;
+  const n = list.length;
+  let s, pos;
+  if(landscape){
+    s = Math.min(z.w - 30, (z.h - 40) / n - 14);
+    pos = i => ({x:z.x + z.w / 2, y:z.y + 36 + (i + 0.5) * (z.h - 40) / n});
+  } else {
+    s = Math.min(z.h - 16, (z.w - 70) / n - 8);
+    pos = i => ({x:z.x + 62 + (i + 0.5) * (z.w - 66) / n, y:z.y + z.h / 2 + 2});
+  }
+  s = Math.max(18, Math.min(s, landscape ? 80 : 46));
+  list.forEach((c, i) => {
+    const p = pos(i), on = S.ch[c.id].lv > 0, pl = fx.chPulse[c.id] || 0;
+    chPos[c.id] = p;
+    const sz = s * (1 + pl * 0.15), x = p.x - sz / 2, y = p.y - sz / 2;
+    ctx.lineWidth = 1.5; ctx.strokeStyle = OUT;
+    rr(x, y + sz * 0.12, sz, sz * 0.88, sz * 0.18); ctx.fillStyle = on ? '#fff' : '#e4e4e7'; ctx.fill(); ctx.stroke();
+    // 차양 (가게 지붕)
+    const col = on ? c.color : '#a1a1aa', sc = 4, sw = sz / sc;
+    for(let k = 0; k < sc; k++){
+      ctx.beginPath(); ctx.moveTo(x + k * sw, y + sz * 0.1);
+      ctx.lineTo(x + (k + 1) * sw, y + sz * 0.1); ctx.lineTo(x + (k + 1) * sw, y + sz * 0.3);
+      ctx.arc(x + (k + 0.5) * sw, y + sz * 0.3, sw / 2, 0, Math.PI); ctx.closePath();
+      ctx.fillStyle = k % 2 ? '#fff' : col; ctx.fill(); ctx.stroke();
+    }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = on ? shade(c.color, -0.35) : '#71717a';
+    ctx.font = `800 ${Math.max(8, Math.round(sz * 0.24))}px sans-serif`;
+    ctx.fillText(on ? c.short : '🔒', p.x, y + sz * 0.7);
+    if(on && evMult(c.id) > 1){ ctx.font = `${Math.round(sz * 0.4)}px sans-serif`; ctx.fillText('🔥', x + sz * 0.95, y + sz * 0.05); }
+    // 수집 대기 중인 주문 수 말풍선 (차오를수록 커짐)
+    const pc = pendCnt[c.id] || 0;
+    if(pc){
+      const t = pc > 99 ? '99+' : String(pc), bs = Math.min(sz * 0.42, 9 + pc * 0.25);
+      ctx.font = `900 ${Math.round(bs * 1.1)}px sans-serif`;
+      const bw = Math.max(bs * 2, ctx.measureText(t).width + 8);
+      rr(x - bw * 0.35, y - bs * 0.6, bw, bs * 1.7, bs * 0.85); ctx.fillStyle = '#2563eb'; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.fillText(t, x - bw * 0.35 + bw / 2, y - bs * 0.6 + bs * 0.88);
+    }
+  });
+  if(moreOn){                       // 아이콘에 안 들어간 연동 채널 수
+    ctx.font = '900 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const t = `+${moreOn}`, w = ctx.measureText(t).width + 12;
+    const bx = landscape ? z.x + z.w / 2 - w / 2 : z.x + z.w - w - 4, by = landscape ? z.y + z.h - 24 : z.y + 4;
+    rr(bx, by, w, 18, 9); ctx.fillStyle = '#0f766e'; ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.fillText(t, bx + w / 2, by + 9.5);
+  }
+  if(landscape) label(z, `🛒 수집 ${Math.ceil(S.waveT)}s`, sheetBadge('channel'));
+  else {
+    ctx.fillStyle = '#0f766e'; ctx.font = '800 12px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('🛒 주문', z.x + 8, z.y + z.h / 2 - 7);
+    ctx.font = '700 10px sans-serif'; ctx.fillStyle = '#2563eb'; ctx.fillText(`수집 ${Math.ceil(S.waveT)}s`, z.x + 8, z.y + z.h / 2 + 9);
+    z.lab = {x:z.x, y:z.y, w:56, h:z.h};
+    if(sheetBadge('channel')){ ctx.beginPath(); ctx.arc(z.x + 54, z.y + z.h / 2 - 9, 6, 0, TAU); ctx.fillStyle = '#ef4444'; ctx.fill(); }
+  }
+}
+function drawInbound(){
+  const z = L.inbound;
+  const dw = Math.min(z.w * 0.7, 110), dx = z.x + (z.w - dw) / 2, dy = z.y + 30, dh = Math.min(z.h * 0.3, 40);
+  // 셔터 문
+  ctx.lineWidth = 1.5; ctx.strokeStyle = OUT;
+  rr(dx, dy, dw, dh, 4); ctx.fillStyle = '#a1a1aa'; ctx.fill(); ctx.stroke();
+  const open = fx.inTruck > 0 ? 0.25 : 1;
+  ctx.fillStyle = '#d4d4d8'; ctx.fillRect(dx + 3, dy + 3, dw - 6, (dh - 6) * open);
+  ctx.strokeStyle = '#a1a1aa'; ctx.lineWidth = 1;
+  for(let yy = dy + 7; yy < dy + 3 + (dh - 6) * open; yy += 5){ ctx.beginPath(); ctx.moveTo(dx + 4, yy); ctx.lineTo(dx + dw - 4, yy); ctx.stroke(); }
+  const s = Math.min(z.w * 0.3, z.h * 0.3, 42);
+  if(fx.inTruck > 0){
+    const k = Math.min(1, (2.2 - fx.inTruck) * 3);
+    ctx.save(); ctx.beginPath(); ctx.rect(z.x, z.y, z.w, z.h); ctx.clip();
+    truck(dx + dw / 2 + s * 0.2, dy + dh + s * 0.15 - (1 - k) * 0 , s * 0.75, '#8b5cf6', 0, '입고');
+    ctx.restore();
+  }
+  const busy = fx.pallets.length > 0;
+  if(!busy){
+    forklift(z.x + z.w - s * 0.8, z.y + z.h - 8, s * 0.9, false, -1);
+    if(S.stock < S.cap * 0.15){ ctx.font = '700 11px sans-serif'; ctx.fillStyle = '#7c3aed'; ctx.textAlign = 'center'; ctx.fillText('z z', z.x + z.w - s * 0.5, z.y + z.h - s * 1.2); }
+  }
+  label(z, '📥 입하', S.autoIn ? false : sheetBadge('stock'));
+}
+function drawRack(){
+  const z = L.rack;
+  const cols = Math.min(7, 3 + Math.floor(S.capLv / 2)), levels = 3;
+  const x0 = z.x + 10, x1 = z.x + z.w - 10, yTop = z.y + 32, yBot = z.y + z.h - 22;
+  const cw = (x1 - x0) / cols, lh = (yBot - yTop) / levels;
+  const cells = cols * levels, filled = Math.ceil(S.stock / S.cap * cells);
+  // 칸 박스
+  for(let lv = 0; lv < levels; lv++){
+    for(let c = 0; c < cols; c++){
+      const idx = lv * cols + c;
+      if(idx < filled){
+        const bs = Math.min(cw * 0.7, lh * 0.8);
+        cardboard(x0 + (c + 0.5) * cw, yBot - lv * lh - 3, bs);
+      }
+    }
+  }
+  // 프레임: 파란 기둥 + 주황 빔
+  ctx.strokeStyle = OUT; ctx.lineWidth = 1.2;
+  for(let lv = 0; lv <= levels; lv++){
+    const y = yBot - lv * lh;
+    ctx.fillStyle = '#fb923c'; ctx.fillRect(x0 - 3, y - 2, x1 - x0 + 6, 4); ctx.strokeRect(x0 - 3, y - 2, x1 - x0 + 6, 4);
+  }
+  for(let c = 0; c <= cols; c++){
+    const x = x0 + c * cw;
+    ctx.fillStyle = '#3b82f6'; ctx.fillRect(x - 2, yTop - 4, 4, yBot - yTop + 10); ctx.strokeRect(x - 2, yTop - 4, 4, yBot - yTop + 10);
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '800 11px sans-serif';
+  const empty = S.stock <= 0;
+  ctx.fillStyle = empty ? '#dc2626' : '#475569';
+  ctx.fillText(empty ? '재고 없음! 입고 필요' : `${S.stock} / ${S.cap}`, z.x + z.w / 2, z.y + z.h - 9);
+  label(z, '🗄️ 적치', S.autoIn ? sheetBadge('stock') : false, S.stock <= Math.max(2, S.cap * 0.15));
+}
+// ── 개미떼: 주문 하나 = 다리 달린 작은 컨테이너 하나 ──
+const ants = new Map();          // order.id → {x, y, ph, mv, hidden}
+let slots = [], antSpawn = {x:0, y:0};
+// 피킹존에서 패킹존으로 넘어오는 경계선 위의 랜덤한 점 (한 줄이 아니라 넓게 퍼져서 오게)
+function spawnPt(){
+  const pk = L.pick, pz = L.pack, r = Math.random(), lane = R * 0.9;
+  // 55% 위쪽 존들(피킹 쪽) · 30% 좌우 가장자리 · 15% 출구 쪽 가장자리(출구 레인만 피해서)
+  if(landscape){
+    if(r < 0.55) return {x:pz.x + 4 + Math.random() * R * 0.8, y:pk.y + 10 + Math.random() * (pk.h - 20)};
+    if(r < 0.85){ const top = Math.random() < 0.5; return {x:pz.x + 20 + Math.random() * (pz.w - 40), y:top ? pz.y + 30 + Math.random() * 8 : pz.y + pz.h - 4 - Math.random() * 8}; }
+    const E = exitPoint(); let y; do { y = pz.y + 30 + Math.random() * (pz.h - 40); } while(Math.abs(y - E.y) < lane);
+    return {x:pz.x + pz.w - 4 - Math.random() * 8, y};
+  }
+  if(r < 0.55){
+    const x0 = L.inbound.x, x1 = pk.x + pk.w;
+    return {x:x0 + 6 + Math.random() * (x1 - x0 - 12), y:pz.y + 4 + Math.random() * R * 0.6};
+  }
+  if(r < 0.85){ const left = Math.random() < 0.5; return {x:left ? pz.x + 4 + Math.random() * 8 : pz.x + pz.w - 4 - Math.random() * 8, y:pz.y + 30 + Math.random() * (pz.h - 40)}; }
+  const E = exitPoint(); let x; do { x = pz.x + 10 + Math.random() * (pz.w - 20); } while(Math.abs(x - E.x) < lane);
+  return {x, y:pz.y + pz.h - 4 - Math.random() * 8};
+}
+let pileEA = 0, rushBtn = null, exitA = Math.PI / 2;
+// 출구 레인 근처인지 (레일 바깥에서 출구 방향 ±32° 안쪽 + 레인 폭) → 거기엔 산을 안 쌓음
+function inExitLane(x, y){
+  let d = Math.atan2((y - cy) / KY, x - cx) - exitTheta; d = Math.atan2(Math.sin(d), Math.cos(d));
+  if(Math.abs(d) < 0.56) return true;
+  const ux = Math.cos(exitA), uy = Math.sin(exitA), px = x - cx, py = y - cy;
+  const along = px * ux + py * uy, side = Math.abs(-px * uy + py * ux);
+  return along > 0 && side < R * 0.75;
+}
+const surge = {lv:0, t:0};
+const pileLbl = {x:0, y:0, t:'', lvl:-1, show:0};
+// ── 점 군중: 쌓인 건수만큼 실제 점을 그림 (최대 MAXDOTS개, 넘으면 1점 = 여러 건)
+const MAXDOTS = 2500, DOT_LIFT = 0.075;   // 큼직한 택배 상자 최대 2,500개 (넘으면 1개 = 여러 건)
+let dotSlots = [], dpp = 1, dotTopY = 0, dotUsed = 0;
+const crowds = new Map();          // order.id → {k, xs, ys, ls}
+const frontN = () => S.st < 2 ? 24 : 0;   // 초반엔 맨 앞 24묶음만 귀여운 컨테이너
+const isTote = (o, i) => i < frontN() && (o.n || 1) === 1;   // 1건짜리일 때만 컨테이너 (그래야 보이는 개수 = 실제 건수)
+// 점 군중 자리: 레일 주변 대기 구역 4곳에서 덩어리로 불어나다 서로 이어짐 (레퍼런스 느낌)
+function buildDotSlots(){
+  dotSlots = [];
+  const z = L.pack, RR = R * 1.85, ea = pileEA;
+  const gap = Math.max(6, R * 0.13), step = Math.max(5, R * 0.11), ground = [];
+  const centers = [0, 1.1, -1.1, 2.0, -2.0, 2.55, -2.55].map((da, i) => {
+    const a = ea + da, r0 = R * 3.0;
+    return {x:cx + Math.cos(a) * r0, y:cy + Math.sin(a) * r0 * KY, w:i * 0.35};
+  });
+  for(let k = 0; k < 2000; k++){
+    const rk = RR + R * 0.42 + k * step;
+    if(rk > Math.max(z.w, z.h)) break;
+    const n = Math.floor(TAU * rk / gap);
+    for(let j = 0; j < n; j++){
+      const a = (j / n) * TAU + (k % 2) * (TAU / n / 2);
+      const x = cx + Math.cos(a) * rk + (Math.random() - 0.5) * 0.9, y = cy + Math.sin(a) * rk * KY + (Math.random() - 0.5) * 0.9;
+      if(x < z.x + 4 || x > z.x + z.w - 4 || y < z.y + 28 || y > z.y + z.h - 4) continue;
+      if(inExitLane(x, y)) continue;
+      // 덩어리 없이: 입구 쪽부터 레일을 따라 고르게 둘러싸며 쌓임
+      let da = ((a - ea) % TAU + TAU) % TAU; if(da > Math.PI) da = TAU - da;
+      ground.push({x, y, p:da * 0.9 + (rk - RR) / R * 1.07 + Math.random() * 0.15});
+    }
+  }
+  ground.sort((a, b) => a.p - b.p);
+  if(ground.length > MAXDOTS) ground.length = MAXDOTS;
+  for(let l = 0; l < 12; l++){
+    const cnt = Math.floor(ground.length * Math.max(0, 1 - l * 0.08));
+    for(let r = 0; r < cnt; r++) dotSlots.push({x:ground[r].x, y:ground[r].y, l, p:ground[r].p + l * 0.3});
+  }
+  dotSlots.sort((a, b) => a.p - b.p);
+  if(dotSlots.length > MAXDOTS) dotSlots.length = MAXDOTS;
+  crowds.clear();
+  // 점 전용 픽셀 버퍼 (CSS 픽셀 해상도) — 만 단위 점을 빠르게 찍기 위함
+  dotW = Math.max(1, Math.ceil(W)); dotH = Math.max(1, Math.ceil(H));
+  dotCv = document.createElement('canvas'); dotCv.width = dotW; dotCv.height = dotH;
+  dotCx = dotCv.getContext('2d'); dotImg = dotCx.createImageData(dotW, dotH); dotU32 = new Uint32Array(dotImg.data.buffer);
+}
+let dotCv = null, dotCx = null, dotImg = null, dotU32 = null, dotW = 0, dotH = 0;
+const leaving = [];   // 포장돼서 중앙 포장대로 걸어가는 점 무리
+function abgr(hex, lighten){
+  const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  if(lighten){ r += (255 - r) * lighten; g += (255 - g) * lighten; b += (255 - b) * lighten; }
+  return ((255 << 24) | ((b | 0) << 16) | ((g | 0) << 8) | (r | 0)) >>> 0;
+}
+function abgrDark(hex, k){ const n = parseInt(hex.slice(1), 16); return ((255 << 24) | ((((n & 255) * k) | 0) << 16) | (((((n >> 8) & 255) * k) | 0) << 8) | (((n >> 16) * k) | 0)) >>> 0; }
+const pastel = hex => [abgr(hex, 0.42), abgr(hex, 0.72), abgr(hex, 0.25) & 0xffffffff];
+const PAL = {urgent:pastel('#ef4444'), late:pastel('#a8a29e')};
+CH.forEach(c => PAL[c.id] = pastel(c.color));
+for(const k in PAL) PAL[k][2] = (function(){ const v = PAL[k][0]; const r = v & 255, g = (v >> 8) & 255, b = (v >> 16) & 255; return ((255 << 24) | ((b * 0.82 | 0) << 16) | ((g * 0.82 | 0) << 8) | (r * 0.82 | 0)) >>> 0; })();
+PAL.box = [abgr('#d9a86c'), abgr('#f1d3a3'), abgr('#b07a40')];   // 출고 택배 (골판지색)
+function updateDots(dt){
+  const F = frontN();
+  let total = 0;
+  for(let i = 0; i < S.orders.length; i++) if(!isTote(S.orders[i], i)) total += S.orders[i].n || 1;
+  // 1점=몇 건 비율은 여유를 두고 가끔만 바꿈 (매 프레임 바뀌면 점 무리가 깜빡임)
+  const need = Math.max(1, Math.ceil(total / Math.max(1, dotSlots.length)));
+  if(need > dpp) dpp = need === 1 ? 1 : Math.ceil(need * 1.3);
+  else if(dpp > 1 && need < dpp * 0.5) dpp = Math.max(1, Math.ceil(need * 1.3));
+  const live = new Set();
+  let d = 0, top = 1e9;
+  const sp = R * 1.5 * dt, kl = Math.min(1, dt * 4);   // 천천히 걸어옴
+  for(let i = 0; i < S.orders.length && d < dotSlots.length; i++){
+    const o = S.orders[i]; if(isTote(o, i)) continue; live.add(o.id);
+    const k = Math.min(dotSlots.length - d, Math.max(1, Math.round((o.n || 1) / dpp)));
+    let c = crowds.get(o.id);
+    if(!c || c.k !== k){
+      // 점 개수가 바뀌어도 기존 점 위치는 그대로 두고, 늘어난 점만 근처에 추가
+      const old = c; c = {k, xs:new Float32Array(k), ys:new Float32Array(k), ls:new Float32Array(k), ph:old ? old.ph : Math.random() * TAU};
+      const a = ants.get(o.id), keep = old ? Math.min(old.k, k) : 0;
+      for(let j = 0; j < keep; j++){ c.xs[j] = old.xs[j]; c.ys[j] = old.ys[j]; c.ls[j] = old.ls[j]; }
+      for(let j = keep; j < k; j++){
+        const src2 = keep ? (j % keep) : -1;
+        if(src2 >= 0){ c.xs[j] = c.xs[src2] + (Math.random() - 0.5) * 6; c.ys[j] = c.ys[src2] + (Math.random() - 0.5) * 4; c.ls[j] = c.ls[src2]; }
+        else if(a){ c.xs[j] = a.x + (Math.random() - 0.5) * 6; c.ys[j] = a.y + (Math.random() - 0.5) * 4; }
+        else { if(!c.sp) c.sp = spawnPt(); c.xs[j] = c.sp.x + (Math.random() - 0.5) * 10; c.ys[j] = c.sp.y + (Math.random() - 0.5) * 6; }   // 한 주문은 한 지점에서 무리로 출발
+      }
+      crowds.set(o.id, c);
+    }
+    // 무리 이동: 무리 중심까지 거리로 한 번만 속도를 정하고, 모든 상자가 같은 비율로 움직임 (꼬물거림 없음)
+    let mx = 0, my = 0;
+    for(let j = 0; j < k; j++){ const s = dotSlots[d + j]; mx += s.x - c.xs[j]; my += s.y - c.ys[j]; }
+    const md = Math.hypot(mx / k, my / k), f = md > 0.5 ? Math.min(1, sp / md) : 1;
+    for(let j = 0; j < k; j++, d++){
+      const s = dotSlots[d];
+      c.xs[j] += (s.x - c.xs[j]) * f; c.ys[j] += (s.y - c.ys[j]) * f;
+      c.ls[j] += (s.l - c.ls[j]) * kl;
+      const ty = c.ys[j] - c.ls[j] * R * DOT_LIFT; if(ty < top) top = ty;
+    }
+  }
+  for(const id of crowds.keys()) if(!live.has(id)) crowds.delete(id);
+  // 포장된 무리: 포장대로 걸어가서 도착하면 사라짐
+  const tx = cx - R * 0.15, ty = cy - R * 0.1, ls = R * 3.2 * dt;
+  for(let q = leaving.length - 1; q >= 0; q--){
+    const e = leaving[q], c = e.c; e.t += dt;
+    let far = 0;
+    for(let j = 0; j < c.k; j++){
+      const dx = tx - c.xs[j], dy = ty - c.ys[j], dist = Math.hypot(dx, dy);
+      if(dist > R * 0.5){ const st = Math.min(1, ls / dist); c.xs[j] += dx * st; c.ys[j] += dy * st; far++; }
+      else c.xs[j] = -999;      // 도착한 점은 숨김
+      c.ls[j] *= 0.9;
+    }
+    if(!far || e.t > 6) leaving.splice(q, 1);
+  }
+  let tot = 0; for(const e of leaving) tot += e.c.k;
+  while(tot > 8000 && leaving.length){ tot -= leaving[0].c.k; leaving.shift(); }
+  dotUsed = d; dotTopY = top;
+}
+function crowdPos(o){ const c = crowds.get(o.id); return c ? {x:c.xs[0], y:c.ys[0] - c.ls[0] * R * DOT_LIFT} : null; }
+// 레일 → 택배존 출구: 레일에 뚫린 문 + 바닥 컨베이어 레인
+function drawExitLane(){
+  const z = L.pack, ux = Math.cos(exitA), uy = Math.sin(exitA);
+  const E = exitPoint(), len = Math.hypot(E.x - cx, E.y - cy), wd = R * 0.95;
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(exitA);
+  // 레인 바닥
+  ctx.fillStyle = '#e7e5e4'; ctx.fillRect(R * 1.3, -wd / 2, len - R * 1.3 + 8, wd);
+  ctx.strokeStyle = '#a8a29e'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(R * 1.3, -wd / 2); ctx.lineTo(len + 8, -wd / 2); ctx.moveTo(R * 1.3, wd / 2); ctx.lineTo(len + 8, wd / 2); ctx.stroke();
+  // 흐르는 화살표 (나가는 방향)
+  ctx.strokeStyle = '#d6d3d1'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  const off = (now / 25) % (R * 0.5);
+  for(let s = R * 1.4 + off; s < len; s += R * 0.5){
+    ctx.beginPath(); ctx.moveTo(s - R * 0.12, -wd * 0.22); ctx.lineTo(s, 0); ctx.lineTo(s - R * 0.12, wd * 0.22); ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+  ctx.restore();
+  // 레일에 뚫린 문 (기둥 두 개 + 상인방)
+  const RRo = R * 1.85, gx = cx + Math.cos(exitTheta) * RRo, gy = cy + Math.sin(exitTheta) * RRo * KY;
+  const px = -uy, py = ux, hw = R * 0.62;
+  ctx.fillStyle = '#57534e';
+  for(const sgn of [-1, 1]){ const x = gx + px * hw * sgn, y = gy + py * hw * sgn; rr(x - R * 0.09, y - R * 0.55, R * 0.18, R * 0.62, 3); ctx.fill(); }
+  ctx.fillStyle = '#facc15';
+  rr(gx - hw - R * 0.12, gy - R * 0.62, hw * 2 + R * 0.24, R * 0.13, 3); ctx.fill();
+}
+// 포장된 택배가 출구 레인을 따라 택배 트럭으로 흘러감
+const outflow = [];
+let dockPt = {x:0, y:0};
+function exitPoint(){
+  const z = L.pack, ux = Math.cos(exitA), uy = Math.sin(exitA);
+  let t = 1e9;
+  if(ux > 0) t = Math.min(t, (z.x + z.w - cx) / ux); if(ux < 0) t = Math.min(t, (z.x - cx) / ux);
+  if(uy > 0) t = Math.min(t, (z.y + z.h - cy) / uy); if(uy < 0) t = Math.min(t, (z.y - cy) / uy);
+  return {x:cx + ux * (t + 4), y:cy + uy * (t + 4)};
+}
+function spawnOutflow(n){
+  const spread = Math.min(3, 0.4 + n / 500);        // 많을수록 길게 이어서 나감 (최대 3초)
+  const o = L.out;
+  for(let k = 0; k < n && outflow.length < 16000; k++){
+    const gx = o.x + 8 + Math.random() * (o.w - 16), gy = o.y + 26 + Math.random() * (o.h - 32);   // 출고존 안에서 퍼질 목적지
+    outflow.push({t:-Math.random() * spread * 0.32, off:(Math.random() - 0.5) * R * 0.7, sp:0.3 + Math.random() * 0.1, gx, gy});
+  }
+}
+function updateOutflow(dt){
+  for(let q = outflow.length - 1; q >= 0; q--){
+    const f = outflow[q]; f.t += dt * f.sp;
+    if(f.t >= 1){ outflow.splice(q, 1); fx.truck.load += 1; }
+  }
+}
+// 5×4 택배 상자 한 개 찍기 (x,y = 아래 가운데)
+function box5(u, w, h, x, y, pc){
+  if(x < 2 || x >= w - 3 || y < 4 || y >= h) return;
+  const a = pc[0], t = pc[1], d = pc[2];
+  let q = y * w + x;            // 아랫줄
+  u[q - 2] = d; u[q - 1] = d; u[q] = d; u[q + 1] = d; u[q + 2] = d;
+  q -= w; u[q - 2] = a; u[q - 1] = a; u[q] = a; u[q + 1] = a; u[q + 2] = a;
+  q -= w; u[q - 2] = a; u[q - 1] = a; u[q] = t; u[q + 1] = a; u[q + 2] = a;   // 가운데 테이프 자국
+  q -= w; u[q - 2] = t; u[q - 1] = t; u[q] = t; u[q + 1] = t; u[q + 2] = t;   // 윗면
+}
+function drawDots(){
+  if((!dotUsed && !leaving.length && !outflow.length) || !dotU32) return;
+  const u = dotU32, w = dotW, h = dotH, lift = R * DOT_LIFT;
+  u.fill(0);
+  // 작은 택배 상자 점: 아래 2줄은 채널 색, 맨 윗줄은 밝은 색 (알록달록, 징그럽지 않게)
+  const RED = PAL.urgent, GRAY = PAL.late;
+  for(let i = 0; i < S.orders.length; i++){
+    const o = S.orders[i], c = crowds.get(o.id); if(!c || isTote(o, i)) continue;
+    const pc = o.urgent ? RED : o.overdue ? GRAY : PAL[o.ch] || PAL.excel;
+    for(let j = 0; j < c.k; j++) box5(u, w, h, c.xs[j] | 0, (c.ys[j] - c.ls[j] * lift) | 0, pc);
+  }
+  for(const e of leaving){
+    const c = e.c, pc = e.urgent ? RED : PAL[e.ch] || PAL.excel;
+    for(let j = 0; j < c.k; j++) box5(u, w, h, c.xs[j] | 0, (c.ys[j] - c.ls[j] * lift) | 0, pc);
+  }
+  // 출구로 나가는 택배 상자 (갈색 3×3)
+  if(outflow.length){
+    const BOX = PAL.box[0], BOXT = PAL.box[1], E = exitPoint(), D = dockPt, sx = cx - R * 0.15, sy = cy + R * 0.2;
+    const pxv = -Math.sin(exitA), pyv = Math.cos(exitA);
+    for(const f of outflow){
+      if(f.t < 0) continue;
+      let x, y;
+      if(f.t < 0.55){ const k = f.t / 0.55; x = sx + (E.x - sx) * k + pxv * f.off * k; y = sy + (E.y - sy) * k + pyv * f.off * k; }
+      else { const k = (f.t - 0.55) / 0.45, e = 1 - (1 - k) * (1 - k), o = f.off * (1 - k); x = E.x + (f.gx - E.x) * e + pxv * o; y = E.y + (f.gy - E.y) * e + pyv * o; }   // 출고존에서 퍼짐
+      box5(u, w, h, x | 0, y | 0, PAL.box);
+    }
+  }
+  dotCx.putImageData(dotImg, 0, 0);
+  ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(dotCv, 0, 0, dotW, dotH); ctx.restore();
+}
+function buildSlots(){
+  slots = [];
+  const z = L.pack, RR = R * 1.85, pk = L.pick;
+  const pc = {x:pk.x + pk.w / 2, y:pk.y + pk.h / 2};
+  // 가로: 피킹존 쪽부터 / 세로: 레일 아래 앞쪽부터 (위로 쌓일 공간 확보)
+  exitA = landscape ? 0.42 : Math.PI / 2 - 0.5;          // 출구(택배존) 방향: 오른쪽 아래 대각선 (화면 각도)
+  exitTheta = Math.atan2(Math.sin(exitA) / KY, Math.cos(exitA));   // 타원 위 같은 방향
+  const ea = exitTheta + Math.PI;                         // 입구(주문이 오는) 방향: 왼쪽 위
+  pileEA = ea;
+  antSpawn = {x:Math.max(pk.x + 8, Math.min(pk.x + pk.w - 8, cx)), y:Math.max(pk.y + 8, Math.min(pk.y + pk.h - 8, cy))};
+  const gap = R * 0.33, ground = [];
+  for(let k = 0; k < 16; k++){
+    const rk = RR + R * 0.58 + k * R * 0.3;
+    const n = Math.floor(TAU * rk / gap);
+    for(let j = 0; j < n; j++){
+      const a = ea + (j / n) * TAU + (k % 2) * (TAU / n / 2);
+      const x = cx + Math.cos(a) * rk, y = cy + Math.sin(a) * rk * KY;
+      if(x < z.x + 8 || x > z.x + z.w - 8 || y < z.y + 32 || y > z.y + z.h - 8) continue;
+      if(inExitLane(x, y)) continue;
+      let da = ((a - ea) % TAU + TAU) % TAU; if(da > Math.PI) da = TAU - da;
+      ground.push({x, y, p:da + k * 0.32});
+    }
+  }
+  ground.sort((a, b) => a.p - b.p);
+  // 위로 쌓기: 층이 올라갈수록 좁아지는 산더미 (레일 앞에서부터 쌓임)
+  const LM = 12;
+  for(let l = 0; l < LM; l++){
+    const cnt = Math.floor(ground.length * Math.max(0, 1 - l * 0.075));
+    for(let r = 0; r < cnt; r++) slots.push({x:ground[r].x, y:ground[r].y, l, p:ground[r].p + l * 0.32});
+  }
+  slots.sort((a, b) => a.p - b.p);
+  if(slots.length > 800) slots.length = 800;
+}
+function updateAnts(dt){
+  const sp = R * 1.6;
+  const F = frontN();
+  S.orders.forEach((o, i) => {
+    if(!isTote(o, i)){ ants.delete(o.id); return; }
+    let a = ants.get(o.id);
+    if(!a){ const sp = spawnPt(); a = {x:sp.x, y:sp.y, l:0, ph:Math.random() * TAU, mv:1, hidden:false}; ants.set(o.id, a); }
+    const s = slots[i];
+    if(!s){ a.hidden = true; a.x = antSpawn.x; a.y = antSpawn.y; a.l = 0; return; }
+    a.hidden = false;
+    a.l += (s.l - a.l) * Math.min(1, dt * 7);
+    const dx = s.x - a.x, dy = s.y - a.y, d = Math.hypot(dx, dy);
+    if(d > 0.6){ const st = Math.min(d, sp * dt); a.x += dx / d * st; a.y += dy / d * st; a.mv = 1; }
+    else a.mv = Math.max(0, a.mv - dt * 4);
+    a.ph += dt * 16;
+  });
+}
+const hidden = n => Math.max(0, n - slots.length);
+function drawCrowd(a, o, isTarget){
+  // 주문 1묶음 = 작은 사람 점 여러 개 (묶음이 클수록 점이 많아짐)
+  const k = 3 + Math.min(7, Math.floor(Math.log10(Math.max(1, o.n || 1))));
+  if(!a.dots || a.dots.length !== k){
+    a.dots = [];
+    for(let i = 0; i < k; i++){ const ang = Math.random() * TAU, rd = Math.sqrt(Math.random()) * R * 0.22; a.dots.push([Math.cos(ang) * rd, Math.sin(ang) * rd * 0.8, Math.random() * TAU]); }
+  }
+  const lift = a.l * R * 0.12, walk = a.mv > 0.1;
+  const head = o.urgent ? '#ef4444' : chDef(o.ch).color;
+  if(isTarget){ ctx.fillStyle = 'rgba(250,204,21,.8)'; ctx.beginPath(); ctx.ellipse(a.x, a.y - lift, R * 0.3, R * 0.14, 0, 0, TAU); ctx.fill(); }
+  ctx.fillStyle = o.urgent ? '#b91c1c' : '#27272a';
+  for(const d of a.dots){
+    const jy = walk ? Math.abs(Math.sin(a.ph + d[2])) * 1.5 : 0;
+    ctx.fillRect(a.x + d[0] - 1, a.y + d[1] - lift - 3 - jy, 2.2, 3.4);
+  }
+  ctx.fillStyle = head;
+  for(const d of a.dots){
+    const jy = walk ? Math.abs(Math.sin(a.ph + d[2])) * 1.5 : 0;
+    ctx.fillRect(a.x + d[0] - 1, a.y + d[1] - lift - 5.2 - jy, 2.2, 2);
+  }
+}
+function drawAnt(a, o, isTarget){
+  if(S.st >= 2) return drawCrowd(a, o, isTarget);
+  const s = R * 0.3 * (o.size > 1 ? 1.4 : 1);
+  const low = o.t / o.max < 0.3;
+  const x = a.x, y = a.y - a.l * R * 0.17;
+  const walk = a.mv > 0.1 && a.l < 0.3, hop = walk ? Math.abs(Math.sin(a.ph)) * s * 0.18 : 0, lg = walk ? Math.sin(a.ph) * s * 0.2 : 0;
+  if(isTarget){ ctx.fillStyle = 'rgba(250,204,21,.7)'; ctx.beginPath(); ctx.ellipse(x, y, s * 0.75, s * 0.3, 0, 0, TAU); ctx.fill(); }
+  ctx.strokeStyle = OUT; ctx.lineWidth = Math.max(1, s * 0.13); ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x - s * 0.22, y - s * 0.12); ctx.lineTo(x - s * 0.22 + lg, y + s * 0.1);
+  ctx.moveTo(x + s * 0.22, y - s * 0.12); ctx.lineTo(x + s * 0.22 - lg, y + s * 0.1);
+  ctx.stroke(); ctx.lineCap = 'butt';
+  const col = o.urgent ? '#ef4444' : o.overdue ? '#a8a29e' : chDef(o.ch).color;
+  const yb = y - s * 0.1 - hop;
+  block(x, yb, s, s * 0.5, s * 0.3, col, shade(col, 0.45), Math.max(1, s * 0.08));
+  ctx.fillStyle = OUT;
+  ctx.beginPath(); ctx.arc(x - s * 0.15, yb - s * 0.2, s * 0.065, 0, TAU); ctx.arc(x + s * 0.15, yb - s * 0.2, s * 0.065, 0, TAU); ctx.fill();
+  if(o.br){ const ct = S.contracts.find(c => c.id === o.br); if(ct){ ctx.font = `${Math.round(s * 0.55)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(BRANDS[ct.b].icon, x - s * 0.5, yb - s * 0.85); } }
+  if(o.urgent){ ctx.font = `${Math.round(s * 0.6)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('⚡', x, yb - s * 1.05); }
+  else if(low){ ctx.fillStyle = '#60a5fa'; ctx.beginPath(); ctx.ellipse(x + s * 0.5, yb - s * 0.85 + (now / 14 % 5), 1.8, 2.6, 0, 0, TAU); ctx.fill(); }
+}
+function drawPick(){
+  const z = L.pick, n = S.orders.length;
+  const s = Math.max(16, Math.min(z.h * 0.3, z.w * 0.24, 38));
+  // 뒤쪽 선반
+  const sy = z.y + 30, sh = Math.min(z.h * 0.28, 34);
+  ctx.fillStyle = '#fde4d4'; ctx.strokeStyle = OUT; ctx.lineWidth = 1.2;
+  rr(z.x + 8, sy, z.w - 16, sh, 4); ctx.fill(); ctx.stroke();
+  const cols = Math.max(2, Math.floor((z.w - 20) / 16));
+  for(let i = 0; i < cols; i++){
+    const c = CH[i % CH.length].color;
+    ctx.fillStyle = shade(c, 0.35); rr(z.x + 12 + i * (z.w - 24) / cols, sy + sh * 0.3, (z.w - 24) / cols - 3, sh * 0.6, 2); ctx.fill();
+  }
+  // 카트 미는 피커
+  const k = (Math.sin(now / 900) + 1) / 2, dir = Math.cos(now / 900) >= 0 ? 1 : -1;
+  const px = z.x + s * 0.8 + k * Math.max(0, z.w - s * 2.4), yb = z.y + z.h - 8;
+  const cxp = px + dir * s * 0.75;
+  chibi(px, yb, s, '#22c55e', '#facc15', n ? Math.abs(Math.sin(now / 110)) * 1.5 : 0);
+  ctx.strokeStyle = OUT; ctx.lineWidth = 1.5;
+  rr(cxp - s * 0.38, yb - s * 0.55, s * 0.76, s * 0.4, 3); ctx.fillStyle = '#e4e4e7'; ctx.fill(); ctx.stroke();
+  for(let i = 0; i < Math.min(3, n); i++) tote(cxp - s * 0.2 + i * s * 0.2, yb - s * 0.55, s * 0.24, chDef(S.orders[S.orders.length - 1 - i].ch).color);
+  ctx.beginPath(); ctx.arc(cxp - s * 0.25, yb - s * 0.08, s * 0.08, 0, TAU); ctx.arc(cxp + s * 0.25, yb - s * 0.08, s * 0.08, 0, TAU); ctx.fillStyle = OUT; ctx.fill();
+  const hidden = 0;
+  if(hidden > 0){
+    ctx.font = '900 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const t = `+${hidden} 대기`, w = ctx.measureText(t).width + 14;
+    rr(z.x + z.w - w - 6, z.y + 6, w, 20, 10); ctx.fillStyle = '#dc2626'; ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.fillText(t, z.x + z.w - w / 2 - 6, z.y + 16.5);
+  }
+  label(z, `🧺 피킹 ${n}`, sheetBadge('pick'), n > slots.length * 0.6);
+}
+function boxPacking(xc, yb, s, prog){
+  block(xc, yb, s, s * 0.55, s * 0.36, '#d9a86c', '#b98545', Math.max(1, s * 0.05));
+  const top = yb - s * 0.91, open = 1 - Math.min(1, prog);
+  ctx.lineWidth = Math.max(1, s * 0.05); ctx.strokeStyle = OUT;
+  if(open > 0.02){
+    const fh = s * 0.45 * open;
+    ctx.fillStyle = '#efc993';
+    ctx.beginPath(); ctx.moveTo(xc - s / 2, top); ctx.lineTo(xc - s / 2 - fh * 0.5, top - fh); ctx.lineTo(xc - s * 0.05, top - fh); ctx.lineTo(xc, top); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xc + s / 2, top); ctx.lineTo(xc + s / 2 + fh * 0.5, top - fh); ctx.lineTo(xc + s * 0.05, top - fh); ctx.lineTo(xc, top); ctx.closePath(); ctx.fill(); ctx.stroke();
+  } else {
+    ctx.fillStyle = '#efc993'; rr(xc - s / 2, top, s, s * 0.36, 4); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#f8e7c4'; ctx.fillRect(xc - s * 0.09, top, s * 0.18, s * 0.36);
+  }
+}
+function drawPack(){
+  const z = L.pack, RR = R * 1.85;
+  const nOrd = S.orders.length;
+  // 컨테이너 레일 링 (살짝 눌린 원 = 3/4 시점)
+  const ky = KY;
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(1, ky);
+  const tier = railTier();
+  const BAND = ['#cbd5e1', '#334155', '#e2e8f0', '#f8fafc', '#fed7aa', '#cffafe'];
+  const SIDE = ['#64748b', '#0f172a', '#475569', '#334155', '#9a3412', '#0e7490'];
+  ctx.lineWidth = R * 0.62; ctx.strokeStyle = SIDE[tier];
+  ctx.beginPath(); ctx.arc(0, R * 0.08, RR, 0, TAU); ctx.stroke();
+  ctx.lineWidth = R * 0.56; ctx.strokeStyle = rushT > 0 ? '#fde68a' : BAND[tier];
+  ctx.beginPath(); ctx.arc(0, 0, RR, 0, TAU); ctx.stroke();
+  if(tier === 5){ // 자기부상: 빛나는 띠
+    ctx.lineWidth = R * 0.14; ctx.strokeStyle = 'rgba(34,211,238,.6)';
+    ctx.beginPath(); ctx.arc(0, 0, RR, 0, TAU); ctx.stroke();
+  }
+  // 🛤️ 증설된 포장 라인: 레일 안쪽에 얇은 보조 레일 (최대 4줄 표시)
+  for(let k = 1; k < Math.min(lines(), 5); k++){
+    ctx.lineWidth = R * 0.07; ctx.strokeStyle = '#64748b';
+    ctx.setLineDash([R * 0.18, R * 0.1]); ctx.lineDashOffset = -railAngle * R * 3 * (k % 2 ? 1 : -1);
+    ctx.beginPath(); ctx.arc(0, 0, RR - R * 0.36 - (k - 1) * R * 0.12, 0, TAU); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  if(tier === 0 || tier === 2){        // 롤러
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = Math.max(2, R * 0.05);
+    for(let i = 0; i < 36; i++){
+      const a = railAngle + i * TAU / 36;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * (RR - R * 0.26), Math.sin(a) * (RR - R * 0.26));
+      ctx.lineTo(Math.cos(a) * (RR + R * 0.26), Math.sin(a) * (RR + R * 0.26)); ctx.stroke();
+    }
+  } else if(tier === 1){               // 벨트: 흐르는 화살표
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = Math.max(1.5, R * 0.05);
+    for(let i = 0; i < 24; i++){
+      const a = railAngle + i * TAU / 24, s = (S.spin === 'cw' ? 1 : -1) * 0.06;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a - s) * (RR - R * 0.16), Math.sin(a - s) * (RR - R * 0.16));
+      ctx.lineTo(Math.cos(a + s) * RR, Math.sin(a + s) * RR);
+      ctx.lineTo(Math.cos(a - s) * (RR + R * 0.16), Math.sin(a - s) * (RR + R * 0.16)); ctx.stroke();
+    }
+  } else if(tier === 3){               // 크로스벨트 소터: 알록달록 칸
+    const cols = ['#60a5fa', '#f472b6', '#facc15', '#4ade80', '#a78bfa', '#fb923c'];
+    ctx.lineWidth = R * 0.42;
+    for(let i = 0; i < 30; i++){
+      const a = railAngle + i * TAU / 30;
+      ctx.strokeStyle = cols[i % cols.length];
+      ctx.beginPath(); ctx.arc(0, 0, RR, a + 0.02, a + TAU / 30 - 0.03); ctx.stroke();
+    }
+  } else if(tier === 4){               // 틸트트레이: 주황 트레이
+    ctx.fillStyle = '#f97316'; ctx.strokeStyle = '#7c2d12'; ctx.lineWidth = 1.5;
+    for(let i = 0; i < 20; i++){
+      const a = railAngle + i * TAU / 20;
+      ctx.save(); ctx.rotate(a); ctx.translate(RR, 0);
+      ctx.fillRect(-R * 0.2, -R * 0.12, R * 0.4, R * 0.24); ctx.strokeRect(-R * 0.2, -R * 0.12, R * 0.4, R * 0.24);
+      ctx.restore();
+    }
+  } else {                             // 자기부상: 빛 점
+    ctx.fillStyle = '#ecfeff';
+    for(let i = 0; i < 48; i++){ const a = railAngle * 1.5 + i * TAU / 48; ctx.fillRect(Math.cos(a) * RR - 1.5, Math.sin(a) * RR - 1.5, 3, 3); }
+  }
+  if(tier >= 2){                        // 스파이럴 팔 (레일 안쪽에서 회전)
+    ctx.strokeStyle = tier === 5 ? '#0e7490' : '#18181b'; ctx.lineCap = 'round';
+    const r0 = R * 1.3, r1 = RR - R * 0.3;
+    for(let k = 0; k < 3; k++){
+      ctx.lineWidth = R * 0.13;
+      ctx.beginPath();
+      for(let t = 0; t <= 1.0001; t += 0.1){
+        const rr2 = r0 + (r1 - r0) * t, a = railAngle * 1.2 + k * TAU / 3 + t * 1.3 * (S.spin === 'cw' ? -1 : 1);
+        const x = Math.cos(a) * rr2, y = Math.sin(a) * rr2;
+        if(t === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+  }
+  ctx.restore();
+  // 레일 위를 도는 빈 컨테이너들
+  const items = [];
+  drawExitLane();
+  drawDots();
+  // 레일 앞으로 몰려든 주문 개미떼
+  const tg0 = playerTarget();
+  for(const o of S.orders){
+    const a = ants.get(o.id);
+    if(a && !a.hidden) items.push({y:a.y + a.l * 0.01, draw:() => drawAnt(a, o, o === tg0)});
+  }
+  for(let i = 0; i < 4; i++){
+    const a = railAngle + i * TAU / 4;
+    items.push({y:cy + Math.sin(a) * RR * ky, draw:() => tote(cx + Math.cos(a) * RR, cy + Math.sin(a) * RR * ky + R * 0.14, R * 0.42, '#60a5fa')});
+  }
+  // 작업자 (레일이 돌 때만 같이 포장)
+  const tgtW = playerTarget();
+  for(let i = 0; i < S.workers; i++){
+    const p = workerPos(i), working = railMoveT > 0 && !!tgtW, prog = tgtW ? Math.min(1, manual / TAU) : 0;
+    items.push({y:p.y, draw:() => {
+      chibi(p.x, p.y - R * 0.2, R * 0.55, '#f97316', '#facc15', working ? Math.abs(Math.sin(now / 120 + i)) * 2 : 0);
+      ctx.fillStyle = '#a16207'; ctx.strokeStyle = OUT; ctx.lineWidth = 1.2;
+      rr(p.x - R * 0.36, p.y - R * 0.28, R * 0.72, R * 0.22, 3); ctx.fill(); ctx.stroke();
+      boxPacking(p.x, p.y - R * 0.27, R * 0.36, prog);
+    }});
+  }
+  // 플레이어 + 포장대
+  const tgt = playerTarget(), prog = tgt ? manual / TAU : 0;
+  items.push({y:cy, draw:() => {
+    chibi(cx, cy - R * 0.32, R * 0.85, '#3b82f6', '#fde047', playerBob * 3);
+    const tw = R * 1.7;
+    block(cx, cy + R * 0.5, tw, R * 0.42, R * 0.4, '#b45309', '#d97706', 2);
+    const bs = R * 0.72 * (1 + fx.pop * 0.18);
+    boxPacking(cx - R * 0.15, cy + R * 0.05, bs, prog);
+    if(tgt) tote(cx + R * 0.58, cy + R * 0.02, R * 0.38, tgt.urgent ? '#ef4444' : chDef(tgt.ch).color, tgt.urgent);
+  }});
+  // 진행 링
+  ctx.lineCap = 'round';
+  ctx.lineWidth = Math.max(5, R * 0.12); ctx.strokeStyle = 'rgba(255,255,255,.9)';
+  ctx.beginPath(); ctx.arc(cx, cy - R * 0.25, R * 1.2, 0, TAU); ctx.stroke();
+  if(tgt){
+    ctx.strokeStyle = tgt.urgent ? '#ef4444' : chDef(tgt.ch).color;
+    const dir = S.spin === 'cw' ? 1 : -1;
+    ctx.beginPath(); ctx.arc(cx, cy - R * 0.25, R * 1.2, -Math.PI / 2, -Math.PI / 2 + dir * TAU * Math.min(1, prog), dir < 0); ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+  items.sort((a, b) => a.y - b.y).forEach(it => it.draw());
+  // 산더미 꼭대기 건수 + 폭주 경고
+  // 산더미 건수 표시: 새 단계(100·300·1천·3천·1만…)를 넘을 때만 3초 보였다 사라짐
+  const sumN = S.orders.reduce((s, o) => s + (o.n || 1), 0);
+  {
+    const lvl = sumN >= 100 ? Math.floor(Math.log10(sumN) * 2) : -1;
+    if(lvl > pileLbl.lvl){ pileLbl.lvl = lvl; pileLbl.show = 3; pileLbl.t = ''; }
+    else if(lvl < pileLbl.lvl - 1) pileLbl.lvl = lvl + 1;      // 충분히 줄면 다시 알릴 수 있게
+    if(pileLbl.show > 0 && (dotSlots.length || slots.length)){
+      pileLbl.show = Math.max(0, pileLbl.show - 1 / 60);
+      const base = dotSlots[0] || slots[0], fs = 15;
+      const tx = Math.max(z.x + 70, Math.min(z.x + z.w - 70, base.x));
+      const ty = Math.max(z.y + 72, Math.min(base.y - R * 0.6, (dotUsed ? dotTopY : base.y) - 16));
+      if(!pileLbl.t){ pileLbl.x = tx; pileLbl.y = ty; pileLbl.t = `📦 ${fmtN(sumN)}건 돌파${dpp > 1 ? ` · 1점=${fmtN(dpp)}건` : ''}`; }
+      ctx.save(); ctx.globalAlpha = Math.min(1, pileLbl.show / 0.5);
+      ctx.font = `900 ${fs}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const w = ctx.measureText(pileLbl.t).width + 18;
+      rr(pileLbl.x - w / 2, pileLbl.y - fs * 0.75, w, fs * 1.5, fs * 0.75); ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = '#f97316'; ctx.stroke();
+      ctx.fillStyle = '#c2410c'; ctx.fillText(pileLbl.t, pileLbl.x, pileLbl.y + 1);
+      ctx.restore();
+    }
+  }
+  // 물량 폭주: 구간에 새로 들어갈 때만 잠깐 알리고 사라짐 (계속 깜빡이지 않게)
+  {
+    const lv = nOrd >= 100 ? 2 : nOrd >= 40 ? 1 : 0;
+    if(lv > surge.lv){ surge.lv = lv; surge.t = 2.5; }
+    else if(surge.lv === 2 && nOrd < 70) surge.lv = 1;
+    else if(surge.lv === 1 && nOrd < 28) surge.lv = 0;
+    if(surge.t > 0){
+      surge.t = Math.max(0, surge.t - 1 / 60);
+      const txt = surge.lv >= 2 ? '🚨 물량 대폭주!! 🚨' : '🔥 물량 폭주! 🔥';
+      ctx.save(); ctx.globalAlpha = Math.min(1, surge.t / 0.5);
+      ctx.font = '900 16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 4; ctx.strokeStyle = '#fff'; ctx.strokeText(txt, cx, z.y + 46);
+      ctx.fillStyle = '#dc2626'; ctx.fillText(txt, cx, z.y + 46);
+      ctx.restore();
+    }
+  }
+  // 안내 문구
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  let msg, col = '#334155';
+  if(hintT > 0){ msg = hintMsg; col = '#dc2626'; }
+  else if(tgt) { msg = (tgt.urgent ? '⚡긴급 ' : '') + (tgt.size > 1 ? '🛋️대형 ' : '') + chDef(tgt.ch).name + ' · ' + fmt(orderPay(tgt)); if(tgt.urgent) col = '#dc2626'; }
+  else if(S.stock <= 0 && S.orders.length){ msg = '재고 없음 — 적치 랙을 탭해서 입고!'; col = '#dc2626'; }
+  else msg = '주문 대기 중…';
+  ctx.font = '800 13px sans-serif';
+  const mw = ctx.measureText(msg).width + 20, my = Math.min(z.y + z.h - 16, cy + R * 3.05);
+  // 왼쪽 아래 러시 버튼(폭 118)과 겹치면 오른쪽으로 비켜섬
+  const mx = Math.min(z.x + z.w - mw / 2 - 6, Math.max(cx, z.x + 10 + 118 + 8 + mw / 2));
+  rr(mx - mw / 2, my - 11, mw, 22, 11); ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.fill();
+  ctx.fillStyle = col; ctx.fillText(msg, mx, my + 0.5);
+  if(S.shipped < 5 && !drag && S.orders.length < 30){
+    const how = S.spin === 'ccw' ? '반시계 ↺' : S.spin === 'cw' ? '시계 ↻' : '';
+    const t = `레일 주위로 ${how} 한 바퀴 돌리면 한꺼번에 포장!`;
+    ctx.font = '800 12px sans-serif';
+    const w = ctx.measureText(t).width + 18, ty = Math.max(z.y + 40, cy - R * 3.0);
+    rr(cx - w / 2, ty - 11, w, 22, 11); ctx.fillStyle = '#2563eb'; ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.fillText(t, cx, ty + 0.5);
+    // 손가락 가이드
+    const ga = -now / 500 * (S.spin === 'cw' ? -1 : 1);
+    ctx.font = `${Math.round(R * 0.5)}px sans-serif`;
+    ctx.fillText('👆', cx + Math.cos(ga) * RR * 1.12, cy + Math.sin(ga) * RR * 1.05);
+  }
+  label(z, `📦 패킹 ⚙︎ · 한 바퀴 ${fmtQ(perRev() * curN())}건${lines() > 1 ? ` · 🛤️×${lines()}` : ''}${fever() ? ' · 🔥FEVER' : ''}${rushT > 0 ? ' · ⚡러시' : ''}`, sheetBadge('pack'));
+  // ⚡ 러시 아워 버튼 (패킹존 왼쪽 아래, 유료) — 🔥피버는 30콤보 자동 발동
+  {
+    const bw = 118, bh = 32, bx = z.x + 10;
+    const drawBoostBtn = (by, active, cdLeft, cdMax, cost, label, on, off, offDark) => {
+      const ready = active <= 0 && cdLeft <= 0, afford = S.money >= cost;
+      rr(bx, by + 3, bw, bh, 12); ctx.fillStyle = ready && afford ? offDark : '#a1a1aa'; ctx.fill();
+      rr(bx, by, bw, bh, 12); ctx.fillStyle = active > 0 ? on : ready && afford ? off : '#e4e4e7'; ctx.fill();
+      if(cdLeft > 0 && active <= 0){ ctx.fillStyle = 'rgba(0,0,0,.08)'; rr(bx, by, bw * (cdLeft / cdMax), bh, 12); ctx.fill(); }
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = active > 0 || (ready && afford) ? '#1c1917' : '#71717a';
+      if(active > 0){ ctx.font = '900 13px sans-serif'; ctx.fillText(`${label} ${Math.ceil(active)}s`, bx + bw / 2, by + bh / 2 + 0.5); }
+      else if(cdLeft > 0){ ctx.font = '900 12px sans-serif'; ctx.fillText(`⏳ ${Math.ceil(cdLeft)}s`, bx + bw / 2, by + bh / 2 + 0.5); }
+      else { ctx.font = '900 12px sans-serif'; ctx.fillText(cost > 0 ? `${label} ${fmt(cost)}` : `${label} 무료`, bx + bw / 2, by + bh / 2 + 0.5); }
+      return {x:bx, y:by, w:bw, h:bh};
+    };
+    const by2 = z.y + z.h - bh - 10;
+    rushBtn = drawBoostBtn(by2, rushT, S.cd.rush || 0, RUSH_CD, rushCost(), '⚡ 러시', '#fde047', '#facc15', '#a16207');
+  }
+  // 콤보 카운터
+  if(combo >= 3){
+    const sc = 1 + comboPop * 0.25, y = Math.max(cy - R * 2.35, z.y + 50);
+    const t1 = `${fever() ? '🔥' : ''}포장 ×${combo}`, t2 = `+${Math.round(comboBonus() * 100)}%`;
+    ctx.save(); ctx.translate(cx, y); ctx.scale(sc, sc);
+    ctx.font = '900 20px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const w1 = ctx.measureText(t1).width + 24;
+    rr(-w1 / 2, -16, w1, 32, 8); ctx.fillStyle = '#18181b'; ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.fillText(t1, 0, 1);
+    ctx.font = '800 11px sans-serif';
+    const w2 = ctx.measureText(t2).width + 12;
+    rr(w1 / 2 - 6, -24, w2, 18, 9); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#18181b'; ctx.stroke();
+    ctx.fillStyle = '#18181b'; ctx.fillText(t2, w1 / 2 - 6 + w2 / 2, -14.5);
+    // 콤보 남은 시간 바
+    const k = Math.max(0, comboT / COMBO_GAP);
+    ctx.fillStyle = '#e4e4e7'; ctx.fillRect(-w1 / 2 + 6, 18, w1 - 12, 3);
+    ctx.fillStyle = k < 0.35 ? '#ef4444' : '#18181b'; ctx.fillRect(-w1 / 2 + 6, 18, (w1 - 12) * k, 3);
+    ctx.restore();
+  }
+  // 레일 속도 게이지: 레일 띠 윗부분에 원호로 표시 (다른 걸 가리지 않게)
+  if(gaugeVis > 0.02){
+    const mx = maxRev(), ratio = spd / mx, over = ratio > 1.03 || overheat > 0.3, SPAN = 1.3;
+    const RRg = R * 1.85, a0 = -Math.PI * 0.8, a1 = -Math.PI * 0.2, aMax = a0 + (a1 - a0) / SPAN;
+    ctx.save(); ctx.globalAlpha = Math.min(1, gaugeVis * 1.5);
+    ctx.translate(cx, cy); ctx.scale(1, KY);
+    ctx.lineCap = 'round'; ctx.lineWidth = R * 0.2;
+    ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.beginPath(); ctx.arc(0, 0, RRg, a0, aMax); ctx.stroke();
+    ctx.strokeStyle = 'rgba(254,202,202,.9)'; ctx.beginPath(); ctx.arc(0, 0, RRg, aMax, a1); ctx.stroke();
+    const k = Math.max(0, Math.min(1, ratio / SPAN));
+    if(k > 0.01){
+      ctx.strokeStyle = ratio > 1.03 ? '#ef4444' : ratio > 0.8 ? '#f59e0b' : '#22c55e';
+      ctx.beginPath(); ctx.arc(0, 0, RRg, a0, a0 + (a1 - a0) * k); ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+    // 최대 속도 눈금
+    ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(Math.cos(aMax) * (RRg - R * 0.18), Math.sin(aMax) * (RRg - R * 0.18));
+    ctx.lineTo(Math.cos(aMax) * (RRg + R * 0.18), Math.sin(aMax) * (RRg + R * 0.18)); ctx.stroke();
+    ctx.restore();
+    // 숫자: 레일 띠 맨 위
+    ctx.save(); ctx.globalAlpha = Math.min(1, gaugeVis * 1.5);
+    // 숫자: 원호 오른쪽 끝 바깥 (콤보·개미떼와 안 겹치게)
+    const tx = cx + Math.cos(a1) * (RRg + R * 0.32), ty = cy + Math.sin(a1) * (RRg + R * 0.32) * KY;
+    ctx.font = '900 10px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    const t = over ? `🔥 한계 ${mx.toFixed(2)}` : `${spd.toFixed(2)}/${mx.toFixed(2)}`;
+    ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.strokeText(t, tx, ty);
+    ctx.fillStyle = over ? '#c2410c' : '#0f172a'; ctx.fillText(t, tx, ty);
+    ctx.restore();
+  }
+  // 진행 중 화주사 계약 + SLA 게이지
+  ctx.textBaseline = 'middle';
+  // 계약 표시: SLA가 해지에 가까운 순서로 4곳만, 나머지는 +N곳 (많아져도 안 지저분하게)
+  const risk = ct => ct.cancels / (ct.limit + 2);
+  const shown = S.contracts.slice().sort((a, b) => risk(b) - risk(a) || a.t - b.t).slice(0, 4);
+  shown.forEach((ct, i) => {
+    const b = BRANDS[ct.b], cells = ct.limit + 2, danger = ct.cancels >= cells, warn = ct.cancels >= ct.limit;
+    ctx.font = '800 11px sans-serif';
+    const t = `${b.icon} ${mmss(ct.t)}`, tw = ctx.measureText(t).width, gw = cells * 9 + 4, w = tw + gw + 20;
+    const x = z.x + z.w - w - 6, y = z.y + 6 + i * 24;
+    rr(x, y, w, 20, 10); ctx.fillStyle = danger ? '#fee2e2' : '#fff'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = danger ? '#ef4444' : warn ? '#f97316' : '#5eead4'; ctx.stroke();
+    ctx.fillStyle = '#134e4a'; ctx.textAlign = 'left'; ctx.fillText(t, x + 8, y + 10.5);
+    for(let k = 0; k < cells; k++){
+      const pen = k >= ct.limit, used = k < ct.cancels;
+      ctx.fillStyle = used ? (pen ? '#ea580c' : '#94a3b8') : (pen ? '#fed7aa' : '#d1fae5');
+      rr(x + tw + 14 + k * 9, y + 6, 7, 8, 2); ctx.fill();
+    }
+  });
+  if(S.contracts.length > 4){
+    const t = `📋 +${S.contracts.length - 4}곳 계약 중`, w = ctx.measureText(t).width + 16, x = z.x + z.w - w - 6, y = z.y + 6 + 4 * 24;
+    rr(x, y, w, 20, 10); ctx.fillStyle = '#ccfbf1'; ctx.fill();
+    ctx.fillStyle = '#134e4a'; ctx.textAlign = 'left'; ctx.fillText(t, x + 8, y + 10.5);
+  }
+}
+function drawOut(){
+  const z = L.out, tk = fx.truck;
+  const s = landscape ? Math.min(z.w * 0.36, 52) : Math.min(z.h * 0.5, 50);
+  const tx0 = landscape ? z.x + z.w / 2 - s * 0.1 : z.x + z.w * 0.6;
+  const ty = landscape ? z.y + z.h / 2 + s * 0.5 : z.y + z.h - 10;
+  let tx = tx0;
+  if(tk.state === 'leave') tx = tx0 + Math.pow(tk.t / 0.9, 2) * (z.w + s * 2);
+  if(tk.state === 'arrive') tx = tx0 - (1 - tk.t / 0.7) * (z.w * 0.6 + s * 2);
+  ctx.save(); ctx.beginPath(); rr(z.x, z.y, z.w, z.h, 14); ctx.clip();
+  // 도크 바닥 표시
+  ctx.fillStyle = '#ddd6fe'; ctx.fillRect(tx0 - s * 1.3, ty - 2, s * 2.6, 6);
+  truck(tx, ty, s, '#7c3aed', tk.state === 'arrive' ? 0 : tk.load, carrier().short);
+  if(tk.state === 'leave'){ ctx.font = '700 12px sans-serif'; ctx.fillStyle = '#7c3aed'; ctx.textAlign = 'center'; ctx.fillText('부릉~💨', tx - s * 1.4, ty - s * 0.5); }
+  ctx.restore();
+  // 쌓이는 출고 박스 더미 (트럭 떠난 동안)
+  label(z, `🚚 출고 ${S.shipped.toLocaleString('ko-KR')}`, sheetBadge('out'));
+  return {x:tx0 - s * 0.3, y:ty - s * 0.6};
+}
+function drawBunting(){
+  if(!S.event || S.event.phase !== 'live') return;
+  const cols = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7'];
+  ctx.strokeStyle = '#78716c'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(0, 3); ctx.quadraticCurveTo(W / 2, 16, W, 3); ctx.stroke();
+  for(let x = 8, i = 0; x < W; x += 22, i++){
+    const y = 3 + 13 * (1 - Math.pow((x - W / 2) / (W / 2), 2)) * 0.95;
+    const sw = Math.sin(now / 300 + i) * 2;
+    ctx.fillStyle = cols[i % cols.length];
+    ctx.beginPath(); ctx.moveTo(x - 7, y); ctx.lineTo(x + 7, y); ctx.lineTo(x + sw, y + 14); ctx.closePath(); ctx.fill();
+  }
+}
+function draw(){
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if(bg) ctx.drawImage(bg, 0, 0);
+  // 60건 넘으면 화면이 덜덜 흔들림
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawChannels(); drawInbound(); drawRack(); drawPick(); drawPack();
+  const dock = drawOut();
+  dockPt = dock;
+  // 입하 → 랙 팔레트 운반 지게차
+  for(const p of fx.pallets){
+    const a = {x:L.inbound.x + L.inbound.w * 0.5, y:L.inbound.y + L.inbound.h - 8};
+    const b = {x:L.rack.x + L.rack.w * 0.5, y:L.rack.y + L.rack.h - 6};
+    const k = p.t < 0.5 ? p.t * 2 : 1 - (p.t - 0.5) * 2;
+    const x = a.x + (b.x - a.x) * k, y = a.y + (b.y - a.y) * k;
+    forklift(x, y, Math.min(34, L.inbound.w * 0.28), p.t < 0.5, b.x >= a.x ? (p.t < 0.5 ? 1 : -1) : (p.t < 0.5 ? -1 : 1));
+  }
+  // 주문 전표 날아가기
+  for(const s of fx.slips){
+    const e = 1 - Math.pow(1 - s.t, 2);
+    const x = s.x0 + (s.x1 - s.x0) * e, y = s.y0 + (s.y1 - s.y0) * e - Math.sin(s.t * Math.PI) * 30;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(s.t * 8) * 0.3);
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = OUT; ctx.lineWidth = 1;
+    ctx.fillRect(-6, -8, 12, 16); ctx.strokeRect(-6, -8, 12, 16);
+    ctx.fillStyle = s.color; ctx.fillRect(-6, -8, 12, 4);
+    ctx.fillStyle = '#d4d4d8'; ctx.fillRect(-4, -1, 8, 1.5); ctx.fillRect(-4, 3, 6, 1.5);
+    ctx.restore();
+  }
+  // 포장대로 빨려 들어가는 주문
+  for(const f of fx.flyers){
+    const e = f.t * f.t, s = R * 0.3 * (1 - f.t * 0.5);
+    const x = f.x + (f.tx - f.x) * e, y = f.y + (f.ty - f.y) * e - Math.sin(f.t * Math.PI) * R * 0.5;
+    block(x, y, s, s * 0.5, s * 0.3, f.color, shade(f.color, 0.45), 1);
+  }
+  // 출고 박스 날아가기
+  for(const b of fx.boxes){
+    const e = b.t * b.t;
+    const x = b.x + (dock.x - b.x) * e, y = b.y + (dock.y - b.y) * e - Math.sin(b.t * Math.PI) * R * 0.9;
+    cardboard(x, y, R * 0.3 * (1 - b.t * 0.3));
+  }
+  // 취소 연기
+  for(const p of fx.poofs){
+    ctx.globalAlpha = 1 - p.t;
+    for(let k = 0; k < 5; k++){
+      const a = k / 5 * TAU;
+      ctx.fillStyle = '#d4d4d8'; ctx.beginPath(); ctx.arc(p.x + Math.cos(a) * p.t * 16, p.y - 10 + Math.sin(a) * p.t * 12, 6 * (1 - p.t * 0.5), 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  // 손가락 궤적
+  const tn = performance.now();
+  trail = trail.filter(p => tn - p.t < 350);
+  if(trail.length > 1){
+    ctx.lineCap = 'round';
+    for(let i = 1; i < trail.length; i++){
+      const a = 1 - (tn - trail[i].t) / 350;
+      ctx.strokeStyle = `rgba(59,130,246,${a * 0.7})`; ctx.lineWidth = 2 + a * 7;
+      ctx.beginPath(); ctx.moveTo(trail[i - 1].x, trail[i - 1].y); ctx.lineTo(trail[i].x, trail[i].y); ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+  }
+  ctx.font = '900 15px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for(const t of fx.texts){
+    ctx.globalAlpha = Math.min(1, t.life * 2);
+    ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.strokeText(t.text, t.x, t.y);
+    ctx.fillStyle = t.color; ctx.fillText(t.text, t.x, t.y);
+  }
+  ctx.globalAlpha = 1;
+  drawBunting();
+  if(fx.confetti > 0){
+    fx.confetti = Math.max(0, fx.confetti - 1 / 60);
+    const cols = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#ec4899'];
+    ctx.globalAlpha = Math.min(1, fx.confetti);
+    for(let i = 0; i < 90; i++){
+      const sp = 60 + (i * 37) % 90, x = (i * 97.3 + Math.sin(now / 400 + i) * 30) % W, y = ((now / 1000) * sp + i * 53) % H;
+      ctx.fillStyle = cols[i % cols.length];
+      ctx.save(); ctx.translate(x, y); ctx.rotate(now / 300 + i); ctx.fillRect(-3, -1.5, 6, 3); ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+  if(fx.flash > 0){ ctx.fillStyle = `rgba(220,38,38,${fx.flash * 0.3})`; ctx.fillRect(0, 0, W, H); }
+}
+
+// ═════ 입력: 원 그리기 + 존 탭 ═════
+let drag = null, tap = null, trail = [];
+function pt(e){ const r = cv.getBoundingClientRect(); return {x:e.clientX - r.left, y:e.clientY - r.top}; }
+const inR = (p, r) => r && p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+function applyRotation(rad, dir){
+  rawRad += rad;
+  // 모터 한계: 쓸 수 있는 회전량(railBudget)만큼만 레일이 돈다. 넘치면 과열 표시
+  const use = Math.min(rad, railBudget);
+  railBudget -= use;
+  if(rad - use > 0.001){ overheat = Math.min(1, overheat + (rad - use) * 0.6); if(overheat > 0.3) SFX.grind(); }
+  rad = use;
+  if(rad <= 0) return;
+  usedRad += rad; omegaDir = dir;
+  tickAcc += rad;                                  // 15°마다 다이얼 딸깍
+  let tk = 0;
+  while(tickAcc >= TAU / 24){ tickAcc -= TAU / 24; if(tk++ < 2) SFX.tick(); }
+  playerBob = 1;
+  packRotate(rad, dir, true);
+}
+// 레일이 rad만큼 돌면 그만큼 포장 진행 (byHand: 손으로 돌렸는지 → 콤보·소리·안내)
+function payBoost(cost){
+  if(S.money < cost){ say(`💸 돈이 부족해요 (${fmt(cost)} 필요)`, '#dc2626', 1.4); return false; }
+  S.money -= cost; S.today.mkt += cost; return true;
+}
+function startFever(){                // 자동 발동 (버튼 없음)
+  if(feverT > 0 || (S.cd.fever || 0) > 0) return false;
+  feverT = FEVER_DUR; S.cd.fever = FEVER_CD;
+  say(`🔥 피버! ${FEVER_DUR}초간 한 바퀴 처리량 ×${FEVER_MULT}`, '#ea580c', 1.8); SFX.ding(8);
+  return true;
+}
+function startRush(){
+  if(rushT > 0 || (S.cd.rush || 0) > 0 || !payBoost(rushCost())) return false;
+  rushT = RUSH_DUR; S.cd.rush = RUSH_CD;
+  say(`⚡ 러시 아워! ${RUSH_DUR}초간 처리량 ×${RUSH_MULT} · 속도 ×${RUSH_SPEED}`, '#ca8a04', 2);
+  SFX.ding(4); setTimeout(() => SFX.ding(9), 120);
+  return true;
+}
+function packRotate(rad, dir, byHand){
+  railAngle += rad * dir;
+  railMoveT = 0.25;
+  const o = playerTarget();
+  if(!o){
+    if(byHand){ hintMsg = (S.stock <= 0 && S.orders.length) ? '재고가 없어요! 적치 랙을 탭해서 입고' : '대기 중인 주문이 없어요'; hintT = 1.2; }
+    return;
+  }
+  manual += rad;
+  while(manual >= TAU){                       // 한 바퀴 완성 → 그 바퀴 물량을 한꺼번에 포장
+    manual -= TAU;
+    packBatch(byHand);
+    if(!playerTarget()){ manual = 0; break; }
+  }
+}
+// 한 번에 포장: 한 바퀴 처리량(perRev)만큼 묶음을 동시에 처리
+let batchCarry = 0, batchDots = 0;
+function packBatch(byHand){
+  let cap = perRev() + batchCarry, cnt = 0, sumN = 0, sumPay = 0;
+  batchDots = 0;
+  while(true){
+    const t = playerTarget();
+    if(!t || cap < (t.size || 1)) break;
+    const n = t.n || 1;
+    const pay = complete(t, cx - R * 0.15, cy - R * 0.4, byHand, true);
+    if(!pay) break;
+    cap -= (t.size || 1); cnt++; sumN += n; sumPay += pay;
+  }
+  batchCarry = playerTarget() ? Math.min(cap, 1.5) : 0;      // 남은 몫은 다음 바퀴로 조금만 이월
+  if(!cnt) return;
+  fx.pop = 1;
+  spawnOutflow(Math.max(1, batchDots));     // 들어간 점 개수만큼 1:1로 택배가 나감
+  fx.texts.push({x:cx - R * 0.15, y:cy - R * 0.7, text:`+${fmt(sumPay)} · ${fmtN(sumN)}건`, color:'#16a34a', life:1.3});
+  if(!byHand) return;
+  combo++; comboT = COMBO_GAP; comboPop = 1;
+  if(combo >= FEVER_COMBO) startFever();
+  SFX.clunk();
+  if(combo % 10 === 0) SFX.ding(combo / 10);
+  if(combo > (S.maxCombo || 0)) S.maxCombo = combo;
+  if(navigator.vibrate) try{ navigator.vibrate(18); }catch(e){}
+}
+cv.addEventListener('pointerdown', e => {
+  SFX.unlock();
+  const p = pt(e);
+  try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+  e.preventDefault();
+  if(inR(p, rushBtn)){ startRush(); tap = null; return; }
+  if(inR(p, L.pack) && !inR(p, L.pack.lab)){
+    const fixed = S.spin === 'ccw' ? -1 : S.spin === 'cw' ? 1 : 0;   // 화면 좌표(y 아래) 기준: 반시계 = 음수 각도
+    drag = {id:e.pointerId, last:Math.atan2(p.y - cy, p.x - cx), dir:fixed, fixed, acc:0, back:0};
+    trail = [{x:p.x, y:p.y, t:performance.now()}];
+  } else tap = {id:e.pointerId, x:p.x, y:p.y};
+});
+cv.addEventListener('pointermove', e => {
+  if(!drag || e.pointerId !== drag.id) return;
+  const p = pt(e);
+  trail.push({x:p.x, y:p.y, t:performance.now()});
+  const dist = Math.hypot(p.x - cx, p.y - cy);
+  const a = Math.atan2(p.y - cy, p.x - cx);
+  let d = a - drag.last;
+  if(d > Math.PI) d -= TAU; if(d < -Math.PI) d += TAU;
+  drag.last = a;
+  if(dist < R * 0.35) return;
+  if(!drag.dir){
+    drag.acc += d;
+    if(Math.abs(drag.acc) > 0.35){ drag.dir = Math.sign(drag.acc); applyRotation(Math.abs(drag.acc), drag.dir); }
+    return;
+  }
+  const g = d * drag.dir;
+  if(g > 0){ drag.back = 0; applyRotation(g, drag.dir); }
+  else if(!drag.fixed){ drag.back -= g; if(drag.back > 1.2){ drag.dir = -drag.dir; drag.back = 0; } }
+});
+function endPointer(e){
+  if(drag && e.pointerId === drag.id) drag = null;
+  if(tap && e.pointerId === tap.id){
+    const p = pt(e);
+    if(Math.hypot(p.x - tap.x, p.y - tap.y) < 14){
+      const z = ZONES.find(z => inR(p, z.k === 'pack' ? L.pack.lab : L[z.k]));
+      if(z) openSheet(z.sheet); else closeSheet();
+    }
+    tap = null;
+  }
+}
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', e => { drag = null; tap = null; });
+// 손가락이 화면 밖/다른 요소에서 떨어져도 '그리는 중' 상태가 남지 않게
+cv.addEventListener('lostpointercapture', e => { if(drag && e.pointerId === drag.id) drag = null; });
+window.addEventListener('pointerup', e => { if(drag && e.pointerId === drag.id) drag = null; });
+window.addEventListener('blur', () => { drag = null; tap = null; });
+document.addEventListener('visibilitychange', () => { if(document.hidden){ drag = null; tap = null; } });
+
+function resize(){
+  const r = cv.getBoundingClientRect();
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = r.width; H = r.height;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  layout();
+}
+new ResizeObserver(resize).observe(cv);
+
+// ═════ 업그레이드 시트 ═════
+const SHEETS = {
+  sales:'📋 화주사 영업', mkt:'📣 마케팅', channel:'🛒 주문 채널', stock:'📥 입고 · 적치', pick:'🧺 피킹', pack:'📦 패킹 레일 · 작업자', out:'🚚 출고 · 택배사'
+};
+const SALES_UP = {color:'#0d9488', up:true, title:() => `영업팀 확충 Lv.${S.salesLv}`,
+  desc:() => S.salesLv >= SALES_MAX ? `최대 · 동시 계약 ${salesSlots()}개` : `동시 계약 ${salesSlots()}개 → ${salesSlots() + 1}개 · 제안이 더 자주, 최대 ${offerMax()}→${3 + Math.floor((S.salesLv + 1) / 2)}개`,
+  btn:() => S.salesLv >= SALES_MAX ? 'MAX' : fmt(salesCost()), ok:() => S.salesLv < SALES_MAX && S.money >= salesCost(),
+  act:() => { S.money -= salesCost(); S.salesLv++; }};
+function salesRows(){
+  const rows = [];
+  S.contracts.forEach(ct => {
+    const b = BRANDS[ct.b];
+    rows.push({color:'#14b8a6', title:() => `${b.icon} ${b.name} (계약 중)`,
+      desc:() => `⏱ ${mmss(Math.max(0, ct.t))} 남음 · 출고 ${ct.shipped}건 · 취소 ${ct.cancels}건 (허용 ${ct.limit} · 위약금 ${ct.limit + 1}~${ct.limit + 2} · ${ct.limit + 3}건째 해지)`,
+      btn:() => '진행 중', ok:() => false});
+  });
+  S.offers.forEach(of => {
+    const b = BRANDS[of.b];
+    rows.push({color:of.strict ? '#f59e0b' : '#5eead4', up:() => S.contracts.length < salesSlots(),
+      title:() => `${b.icon} ${b.name}${of.strict ? ' · 까다로움' : ''}`,
+      desc:() => `분당 +${(of.rate * 60).toFixed(0)}건 · 건당 +${fmt(of.fee)} · ${(of.dur / 60).toFixed(1)}분 · 취소 ${of.limit}건 허용, 초과 시 위약금 ${fmt(penaltyOf(of))}/건, ${of.limit + 3}건째 해지(×2)` +
+        `${of.urgent > 0.2 ? ' · ⚡긴급 많음' : ''}${of.size > 1 ? ' · 🛋️대형' : ''} · ${Math.ceil(of.exp)}초 뒤 철회`,
+      btn:() => S.contracts.length >= salesSlots() ? '자리 없음' : '계약하기',
+      ok:() => S.contracts.length < salesSlots() && S.offers.includes(of),
+      once:true, act:() => signContract(of)});
+  });
+  if(!S.contracts.length && !S.offers.length) rows.push({color:'#d4d4d8', title:() => '아직 제안이 없어요',
+    desc:() => S.st < 1 ? `🏙️ 서울 단계부터 화주사가 연락해요` : `다음 제안까지 약 ${Math.ceil(S.nextOffer)}초`,
+    btn:() => '대기', ok:() => false});
+  rows.push(SALES_UP);
+  return rows;
+}
+const salesSig = () => S.contracts.map(c => c.id).join(',') + '|' + S.offers.map(o => o.id).join(',');
+const ROWS = {sales:[], mkt:[], channel:[], stock:[], pick:[], pack:[], out:[]};
+ROWS.mkt.push(
+  {color:'#0ea5e9', up:false, title:() => `📢 상시 광고 Lv.${S.adLv || 0}`,
+   desc:() => (S.adLv || 0) >= AD_MAX ? `최대 · 주문 +${Math.round((adMult() - 1) * 100)}% · 하루 광고비 ${fmt(adCost())}` :
+     `주문 +${Math.round((adMult() - 1) * 100)}% → +${Math.round((adMult() - 1) * 100) + 8}% · 하루 광고비 ${fmt(adCost())} → ${fmt(((S.adLv || 0) + 1) * 6000 * curN())} (정산 때 빠짐)`,
+   btn:() => (S.adLv || 0) >= AD_MAX ? 'MAX' : '예산 올리기', ok:() => (S.adLv || 0) < AD_MAX,
+   act:() => { S.adLv = (S.adLv || 0) + 1; }},
+  {color:'#94a3b8', title:() => '📢 광고 예산 줄이기',
+   desc:() => (S.adLv || 0) ? `Lv.${S.adLv} → ${S.adLv - 1} · 하루 광고비 ${fmt(adCost())} → ${fmt((S.adLv - 1) * 6000 * curN())}` : '지금은 광고를 안 하고 있어요',
+   btn:() => '줄이기', ok:() => (S.adLv || 0) > 0, alt:() => true,
+   act:() => { S.adLv = Math.max(0, (S.adLv || 0) - 1); }},
+);
+ROWS.channel.push(
+  {color:'#facc15', title:() => `⭐ 평점 ${(S.rating || 4).toFixed(1)} · 주문 ×${ratingMult().toFixed(2)}`,
+   desc:() => '제때 출고하면 오르고, 지연·취소가 쌓이면 떨어져요 (모든 채널 주문 ×0.7~×1.5)',
+   btn:() => '자동', ok:() => false},
+  {color:'#22c55e', title:() => `🔁 단골 재구매 · 분당 ${(repeatRate() * ratingMult() * 60).toFixed(1)}묶음`,
+   desc:() => '지금까지 받은 고객이 많을수록 단골 주문이 저절로 늘어요',
+   btn:() => '자동', ok:() => false},
+);
+Object.keys(BOOSTS).forEach(k => {
+  const b = BOOSTS[k];
+  const active = () => S.boosts.find(x => x.k === k);
+  ROWS.mkt.push({
+    color:'#ec4899', up:() => !boostLocked(k) && !S.cd[k],
+    title:() => `${b.icon} ${b.name}`,
+    desc:() => {
+      const a = active();
+      if(a) return `진행 중 · ${a.ch ? chDef(a.ch).name + ' · ' : ''}${Math.ceil(a.t)}초 남음`;
+      if(boostLocked(k)) return `${chDef(b.target).name} 연동 후 사용 가능`;
+      return `${b.desc} · 쿨타임 ${b.cd}초`;
+    },
+    btn:() => S.cd[k] > 0 ? `대기 ${Math.ceil(S.cd[k])}초` : fmt(boostCost(k)),
+    ok:() => !boostLocked(k) && !(S.cd[k] > 0) && S.money >= boostCost(k),
+    once:true, act:() => activateBoost(k),
+  });
+});
+CH.forEach(c => ROWS.channel.push({
+  color:c.color, up:true,
+  title:() => c.name + (S.ch[c.id].lv ? ` Lv.${S.ch[c.id].lv}` : ''),
+  desc:() => {
+    const s = S.ch[c.id];
+    if(c.st > S.st) return `🔒 ${STAGES[c.st].icon} ${STAGES[c.st].name} 단계에서 열려요`;
+    if(c.via && !S.ch[c.via].lv) return '플레이오토 연동 후 열려요';
+    const tr = c.trait ? c.trait + ' · ' : '';
+    if(!s.lv) return `${tr}${c.via ? '플레이오토 연동 · ' : ''}분당 약 ${(c.rate * 60).toFixed(0)}건 · 건당 ${fmt(c.price)}`;
+    return `${tr}분당 ${(chRate(c, false) * 60).toFixed(1)}건 · 건당 ${fmt(c.price)} · 평판 ${Math.round(s.rep * 100)}%`;
+  },
+  btn:() => (S.ch[c.id].lv ? '마케팅 ' : '연동 ') + fmt(chCost(c)),
+  ok:() => !(c.st > S.st) && !(c.via && !S.ch[c.via].lv) && S.money >= chCost(c),
+  act:() => { S.money -= chCost(c); S.ch[c.id].lv++; },
+}));
+ROWS.stock.push(
+  {color:'#8b5cf6', title:() => '입고 +30개',
+   desc:() => `1묶음당 ${fmt(unitCost())} · 적치 ${S.stock}/${S.cap}`,
+   btn:() => fmt(Math.max(0, Math.min(30, S.cap - S.stock)) * unitCost()),
+   ok:() => S.stock < S.cap && S.money >= Math.min(30, S.cap - S.stock) * unitCost(),
+   act:() => buyStock(30)},
+  {color:'#8b5cf6', title:() => '랙 가득 채우기',
+   desc:() => '살 수 있는 만큼 적치 랙을 채워요',
+   btn:() => { const n = Math.min(S.cap - S.stock, Math.floor(S.money / unitCost())); return n > 0 ? `+${n}개 ${fmt(n * unitCost())}` : '불가'; },
+   ok:() => S.stock < S.cap && S.money >= unitCost(),
+   act:() => buyStock(S.cap)},
+  {color:'#3b82f6', up:true, title:() => `적치 랙 확장 Lv.${S.capLv}`,
+   desc:() => `최대 재고 ${S.cap} → ${S.cap + 90} · 임대료 ${fmt(rentOf())} → ${fmt(rentOf() + 3000)}/일`,
+   btn:() => fmt(capCost()), ok:() => S.money >= capCost(),
+   act:() => { S.money -= capCost(); S.capLv++; S.cap += 90; }},
+  {color:'#a78bfa', title:() => '자동 입고 시스템',
+   desc:() => S.autoIn ? `재고 35% 이하면 자동으로 채워요 (${S.autoOn ? '켜짐' : '꺼짐'})` : '재고가 떨어지면 지게차가 알아서 입고',
+   btn:() => S.autoIn ? (S.autoOn ? '끄기' : '켜기') : fmt(10000),
+   ok:() => S.autoIn || S.money >= 10000, alt:() => S.autoIn, up:() => !S.autoIn,
+   once:true, act:() => { if(S.autoIn) S.autoOn = !S.autoOn; else { S.money -= 10000; S.autoIn = true; } }},
+);
+ROWS.pick.push(
+  {color:'#f97316', up:true, title:() => `피킹 동선 최적화 Lv.${S.pickLv}`,
+   desc:() => S.pickLv >= 5 ? `최대 · 일반 주문 마감 ${normalDeadline()}초` : `일반 주문 마감 ${normalDeadline()}초 → ${normalDeadline() + 4}초`,
+   btn:() => S.pickLv >= 5 ? 'MAX' : fmt(pickCost()), ok:() => S.pickLv < 5 && S.money >= pickCost(),
+   act:() => { S.money -= pickCost(); S.pickLv++; }},
+  {color:'#dc2626', up:true, title:() => `긴급 출고 라인 Lv.${S.urgentLv}`,
+   desc:() => S.ch.playauto.lv ? `⚡긴급 마감 ${urgentDeadline()}초 → ${urgentDeadline() + 5}초 (긴급은 먼저 포장돼요)` : '플레이오토 연동 후 ⚡긴급 주문 등장',
+   btn:() => S.urgentLv >= 3 ? 'MAX' : fmt(urgentCost()), ok:() => S.ch.playauto.lv > 0 && S.urgentLv < 3 && S.money >= urgentCost(),
+   act:() => { S.money -= urgentCost(); S.urgentLv++; }},
+);
+ROWS.pack.push(
+  {color:'#111827', up:true, title:() => `⚙️ ${autoName(S.autoLv)} Lv.${S.autoLv}`,
+   desc:() => `물량 단위 ×${AUTO_M} — 주문 1묶음 = ${fmtN(curN())}명 → ${fmtN(curN() * AUTO_M)}명 (매출·비용 같이 ↑)` +
+     (Math.floor((S.autoLv + 1) / 4) > Math.floor(S.autoLv / 4) && S.autoLv + 1 < AUTO_NAMES.length * 4 ? ` · 다음: ${autoName(S.autoLv + 1)} 도입` : ''),
+   btn:() => fmt(autoCost()), ok:() => S.money >= autoCost(),
+   act:() => { S.money -= autoCost(); S.autoLv++; }},
+  {color:'#7c3aed', up:() => S.st >= 3 && (S.autoRotLv || 0) < 3, title:() => `🔄 자동 회전 모터 Lv.${S.autoRotLv || 0}`,
+   desc:() => S.st < 3 ? '🌏 아시아 단계에서 열려요 — 손을 떼도 레일이 천천히 돌아요' :
+     (S.autoRotLv || 0) >= 3 ? `최대 · 손을 떼면 최대 속도의 ${Math.round(autoRotPct() * 100)}%로 혼자 돌아요` :
+     `손을 떼면 최대 속도의 ${Math.round(autoRotPct() * 100)}% → ${Math.round(AUTO_ROT[Math.min(3, (S.autoRotLv || 0) + 1)] * 100)}%로 혼자 돌아요 (콤보는 안 쌓여요)`,
+   btn:() => S.st < 3 ? '🔒' : (S.autoRotLv || 0) >= 3 ? 'MAX' : fmt(autoRotCost()),
+   ok:() => S.st >= 3 && (S.autoRotLv || 0) < 3 && S.money >= autoRotCost(),
+   act:() => { S.money -= autoRotCost(); S.autoRotLv = (S.autoRotLv || 0) + 1; }},
+  {color:'#0f172a', up:() => { const nx = RAILS[railTier() + 1]; return !!nx && nx.st <= S.st; },
+   title:() => { const nx = RAILS[railTier() + 1]; return nx ? `🚝 새 레일: ${nx.name}` : `🚝 ${RAILS[railTier()].name} (최고 레일)`; },
+   desc:() => { const cur = RAILS[railTier()], nx = RAILS[railTier() + 1];
+     if(!nx) return `한 바퀴 처리량 ×${cur.mult} · 더 좋은 레일은 없어요`;
+     if(nx.st > S.st) return `🔒 ${STAGES[nx.st].icon} ${STAGES[nx.st].name} 단계에서 살 수 있어요 · 지금 ${cur.name} ×${cur.mult}`;
+     return `${cur.name} ×${cur.mult} → ${nx.name} ×${nx.mult} (한 바퀴 처리량) · 관성 +${(0.25 * Math.log(Math.max(1.01, maxRev() / 0.04))).toFixed(1)}초`; },
+   btn:() => { const nx = RAILS[railTier() + 1]; return !nx ? 'MAX' : nx.st > S.st ? '🔒' : fmt(railTierCost()); },
+   ok:() => { const nx = RAILS[railTier() + 1]; return !!nx && nx.st <= S.st && S.money >= railTierCost(); },
+   once:true, act:() => { S.money -= railTierCost(); S.railTier = railTier() + 1; say(`🚝 ${RAILS[railTier()].name} 설치 완료! 처리량 ×${RAILS[railTier()].mult}`, '#0f172a', 2.2); fx.confetti = 1.2; SFX.ding(6); }},
+  {color:'#0ea5e9', up:true, title:() => `🛤️ 포장 라인 증설 (${lines()}라인)`,
+   desc:() => `한 바퀴 처리량 ×${lines()} → ×${lines() + 1} (= ${fmtN(perRevBase() * RAILS[railTier()].mult * lines() * curN())}건 → ${fmtN(perRevBase() * RAILS[railTier()].mult * (lines() + 1) * curN())}건)`,
+   btn:() => fmt(lineCost()), ok:() => S.money >= lineCost(),
+   act:() => { S.money -= lineCost(); S.lineLv = (S.lineLv || 0) + 1; say(`🛤️ ${lines()}번 라인 가동!`, '#0369a1', 1.6); }},
+  {color:'#3b82f6', up:true, title:() => `레일 모터 Lv.${S.railLv}`,
+   desc:() => S.railLv >= 15 ? `최대 · 초당 ${maxRev().toFixed(2)}바퀴 · 관성 약 ${coastSec().toFixed(1)}초` : `최대 속도 초당 ${maxRev().toFixed(2)} → ${(maxRev() + 0.12).toFixed(2)}바퀴 (초당 ${(maxRev() * perRev()).toFixed(1)} → ${((maxRev() + 0.12) * perRev()).toFixed(1)}건) · 관성 ${coastSec().toFixed(1)}초→${(inertiaTau() + 0.08) * Math.log(Math.max(1.01, (maxRev() + 0.12) / 0.04)) > 0 ? ((inertiaTau() + 0.08) * Math.log(Math.max(1.01, (maxRev() + 0.12) / 0.04))).toFixed(1) : ''}초 · 유지비 +${fmt(1000 * curN())}/일`,
+   btn:() => S.railLv >= 15 ? 'MAX' : fmt(railCost()), ok:() => S.railLv < 15 && S.money >= railCost(),
+   act:() => { S.money -= railCost(); S.railLv++; }},
+  {color:'#f97316', up:true, title:() => `작업자 고용 (${S.workers}/${MAX_WORKERS})`,
+   desc:() => `한 바퀴 ${fmtQ(perRev() * curN())}건 → ${fmtQ(perRev() * curN() * (perRevBase() + W_PER * (1 + W_TRAIN * S.trainLv)) / perRevBase())}건 (레일이 돌 때만 일해요) · 일당 ${fmt(wageOf())}`,
+   btn:() => S.workers >= MAX_WORKERS ? 'MAX' : fmt(hireCost()), ok:() => S.workers < MAX_WORKERS && S.money >= hireCost(),
+   act:() => { S.money -= hireCost(); S.workers++; S.wp.push(0); }},
+  {color:'#fb923c', up:true, title:() => `작업자 교육 Lv.${S.trainLv}`,
+   desc:() => S.workers ? `작업자 몫 +15% — 한 바퀴 ${fmtQ(perRev() * curN())}건 → ${fmtQ(perRev() * curN() * (SCALE + S.workers * W_PER * (1 + W_TRAIN * (S.trainLv + 1))) / perRevBase())}건 · 일당 +${fmt(1500 * curN())}` : '작업자를 먼저 고용하세요',
+   btn:() => S.trainLv >= 10 ? 'MAX' : fmt(trainCost()), ok:() => S.trainLv < 10 && S.money >= trainCost(),
+   act:() => { S.money -= trainCost(); S.trainLv++; }},
+);
+ROWS.out.push(
+  {color:'#0f172a', up:() => { const nx = CARRIERS[(S.carrier || 0) + 1]; return !!nx && nx.st <= S.st; },
+   title:() => { const nx = CARRIERS[(S.carrier || 0) + 1]; return nx ? `🚛 택배사 계약: ${nx.name}` : `🚛 ${carrier().name} (최고 등급)`; },
+   desc:() => { const nx = CARRIERS[(S.carrier || 0) + 1];
+     if(!nx) return `건당 수익 ×${carrier().mult} · 더 좋은 계약은 없어요`;
+     if(nx.st > S.st) return `🔒 ${STAGES[nx.st].icon} ${STAGES[nx.st].name} 단계에서 계약 가능 · 지금 ${carrier().name} ×${carrier().mult}`;
+     return `${carrier().name} ×${carrier().mult} → ${nx.name} ×${nx.mult} (건당 수익)`; },
+   btn:() => { const nx = CARRIERS[(S.carrier || 0) + 1]; return !nx ? 'MAX' : nx.st > S.st ? '🔒' : fmt(carrierCost()); },
+   ok:() => { const nx = CARRIERS[(S.carrier || 0) + 1]; return !!nx && nx.st <= S.st && S.money >= carrierCost(); },
+   once:true, act:() => { S.money -= carrierCost(); S.carrier = (S.carrier || 0) + 1; say(`🚛 ${carrier().name} 계약 체결! 건당 수익 ×${carrier().mult}`, '#0f172a', 2.2); fx.confetti = 1.2; SFX.ding(6); }},
+  {color:'#7c3aed', up:true, title:() => `택배 단가 협상 Lv.${S.shipLv}`,
+   desc:() => `건당 수익 +${Math.round(S.shipLv * 15)}% → +${Math.round((S.shipLv + 1) * 15)}% (총 ×${shipMult().toFixed(2)} → ×${((1 + 0.15 * (S.shipLv + 1)) * carrier().mult).toFixed(2)})`,
+   btn:() => fmt(shipCost()), ok:() => S.money >= shipCost(),
+   act:() => { S.money -= shipCost(); S.shipLv++; }},
+);
+function sheetBadge(k){
+  if(k === 'sales') return S.offers.length > 0 && S.contracts.length < salesSlots();
+  return ROWS[k].some(r => (typeof r.up === 'function' ? r.up() : r.up) && r.ok());
+}
+
+let sheet = null, rowEls = [], sheetSig = '';
+function bindHold(btn, def){
+  let timer = null, delay = 380, n = 0;
+  const stop = () => { if(timer){ clearTimeout(timer); timer = null; } if(n){ n = 0; save(); } };
+  const fire = () => { if(!btn.isConnected || !def.ok()){ stop(); return false; } def.act(); n++; refresh(); return true; };
+  const loop = () => { if(!fire()) return; delay = Math.max(45, delay * 0.8); timer = setTimeout(loop, delay); };
+  btn.addEventListener('pointerdown', e => {
+    if(e.button !== undefined && e.button !== 0) return;
+    e.preventDefault(); stop(); delay = 380;
+    if(fire()) timer = setTimeout(loop, delay);
+    try{ btn.setPointerCapture(e.pointerId); }catch(_){}
+  });
+  ['pointerup','pointercancel','lostpointercapture'].forEach(ev => btn.addEventListener(ev, stop));
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+  btn.addEventListener('keydown', e => { if((e.key === 'Enter' || e.key === ' ') && !e.repeat){ e.preventDefault(); if(fire()) stop(); } });
+}
+function openSheet(k){
+  sheet = k; S.seenSheet = true;
+  $('sheetTitle').textContent = SHEETS[k];
+  const box = $('rows'); box.innerHTML = '';
+  sheetSig = k === 'sales' ? salesSig() : '';
+  rowEls = (k === 'sales' ? salesRows() : ROWS[k]).map(def => {
+    const row = document.createElement('div'); row.className = 'row';
+    row.innerHTML = `<span class="dot" style="background:${def.color}"></span><div class="info"><div class="t"></div><div class="d"></div></div><button></button>`;
+    const el = {def, t:row.querySelector('.t'), d:row.querySelector('.d'), b:row.querySelector('button')};
+    if(def.once) el.b.addEventListener('click', () => { if(def.ok()){ def.act(); refresh(); save(); } });
+    else bindHold(el.b, def);
+    box.appendChild(row); return el;
+  });
+  $('sheet').classList.add('open');
+  refresh();
+}
+function closeSheet(){ sheet = null; $('sheet').classList.remove('open'); }
+$('sheetClose').onclick = closeSheet;
+$('mktBtn').onclick = () => sheet === 'mkt' ? closeSheet() : openSheet('mkt');
+$('salesBtn').onclick = () => sheet === 'sales' ? closeSheet() : openSheet('sales');
+
+function setText(el, v){ if(el.textContent !== v) el.textContent = v; }
+function refresh(){
+  if(sheet === 'sales' && salesSig() !== sheetSig){ const sc = $('rows').scrollTop; openSheet('sales'); $('rows').scrollTop = sc; return; }
+  for(const el of rowEls){
+    setText(el.t, el.def.title()); setText(el.d, el.def.desc()); setText(el.b, el.def.btn());
+    el.b.disabled = !el.def.ok();
+    el.b.classList.toggle('alt', !!(el.def.alt && el.def.alt()));
+  }
+  setText($('money'), fmt(S.money));
+  setText($('stock'), `${S.stock}/${S.cap}`);
+  $('stockStat').classList.toggle('warn', S.stock <= Math.max(2, S.cap * 0.15));
+  setText($('clock'), `D${S.day} ${clockStr()}`);
+  {
+    const p = S.served / WORLD * 100;
+    const pct = p <= 0 ? '0' : p >= 100 ? '100' : p >= 1 ? p.toFixed(2) : p.toFixed(Math.min(8, Math.max(3, Math.ceil(-Math.log10(Math.max(p, 1e-9))) + 2)));
+    const si = Math.min(S.st, STAGES.length - 1), stg = STAGES[si], prev = si ? STAGES[si - 1].goal : 0;
+    const k = S.st >= STAGES.length ? 1 : Math.min(1, Math.max(0, (S.served - prev) / (stg.goal - prev)));
+    const left = S.st >= STAGES.length ? `🏆 클리어 · ${fmtTime(S.playTime)}` : `${stg.icon} ${stg.name} ${fmtN(S.served)} / ${fmtN(stg.goal)}명`;
+    const g = `<span>🌍 인류의 ${pct}% · ⭐${(S.rating || 4).toFixed(1)}</span><span>${left}</span>`;
+    const gt = $('goalText'); if(gt._h !== g){ gt.innerHTML = g; gt._h = g; }
+    $('goalFill').style.width = (k * 100).toFixed(1) + '%';
+  }
+  setText($('debt'), S.debt > 0 ? ' 빚' + fmt(S.debt).slice(1) : '');
+  $('moneyStat').classList.toggle('indebt', S.debt > 0);
+  const bh = S.boosts.map(b => `<span>${BOOSTS[b.k].icon} ${Math.ceil(b.t)}s</span>`).join('');
+  const bb = $('boostBar'); if(bb._h !== bh){ bb.innerHTML = bh; bb._h = bh; }
+  $('mktBtn').classList.toggle('ready', sheetBadge('mkt'));
+  $('salesBtn').classList.toggle('ready', sheetBadge('sales'));
+  const bn = $('banner');
+  const parts = [];
+  if(S.cutIdx < CUTOFFS.length && !S.night){
+    const h = CUTOFFS[S.cutIdx], sec = (h * 60 - gameMin()) / 540 * DAY_SEC;
+    if(sec <= 35) parts.push(`⏰ ${h}:00 ${h === 18 ? '마지막 ' : ''}집하 마감 ${Math.ceil(sec)}초 · 미출고 ${S.orders.length}건`);
+  }
+  if(parts.length){
+    bn.classList.remove('hidden'); bn.classList.add('live');
+    setText(bn, parts.join('  ·  ') + (S.event && S.event.phase === 'live' ? `  ·  ${EVENTS[S.event.i].icon} ×${EVENTS[S.event.i].mult}` : ''));
+  } else if(S.event){
+    const d = EVENTS[S.event.i], t = Math.ceil(S.event.t);
+    const who = d.only ? ` (${chDef(d.only).name})` : '';
+    bn.classList.remove('hidden'); bn.classList.toggle('live', S.event.phase === 'live');
+    setText(bn, S.event.phase === 'warn'
+      ? `⚠️ ${t}초 후 ${d.icon} ${d.name}${who} ×${d.mult}`
+      : `${d.icon} ${d.name}${who} ×${d.mult} · ${t}초`);
+  } else bn.classList.add('hidden');
+}
+
+// ═════ 메뉴 ═════
+let resetArm = false;
+const SPIN = {ccw:'회전 방향: 반시계 ↺', cw:'회전 방향: 시계 ↻', both:'회전 방향: 양방향 ⟲⟳'};
+const SPIN_NEXT = {ccw:'cw', cw:'both', both:'ccw'};
+function soundLabel(){ $('soundBtn').textContent = S.sound ? '🔊 소리 켜짐' : '🔇 소리 꺼짐'; }
+$('soundBtn').onclick = () => { S.sound = !S.sound; soundLabel(); if(S.sound){ SFX.unlock(); SFX.clunk(); } save(); };
+function spinLabel(){ $('spinBtn').textContent = SPIN[S.spin] || SPIN.ccw; }
+$('spinBtn').onclick = () => { S.spin = SPIN_NEXT[S.spin] || 'ccw'; spinLabel(); save(); };
+$('menuBtn').onclick = () => {
+  $('statsText').innerHTML = `총 출고 <b>${S.shipped.toLocaleString('ko-KR')}</b>건 · 취소 <b>${S.cancelled.toLocaleString('ko-KR')}</b>건<br>누적 매출 <b>${fmt(S.earned)}</b> · 작업자 ${S.workers}명<br>플레이 ${fmtTime(S.playTime)} · 고객 ${fmtN(S.served)}명<br>최고 콤보 ${S.maxCombo || 0} · 화주사 계약 완료 ${S.contractsDone} · 해지 ${S.contractsFailed} · 위약금 ${fmt(S.penalties || 0)}`;
+  resetArm = false; $('resetBtn').textContent = '처음부터 다시'; spinLabel(); soundLabel(); repayLabel();
+  $('menu').classList.remove('hidden');
+};
+$('closeMenu').onclick = () => $('menu').classList.add('hidden');
+$('resetBtn').onclick = () => {
+  if(!resetArm){ resetArm = true; $('resetBtn').textContent = '정말요? 한 번 더 누르면 초기화'; return; }
+  S = fresh(); manual = 0; ants.clear(); crowds.clear(); leaving.length = 0; outflow.length = 0; batchCarry = 0; $('report').classList.add('hidden'); fx.truck = {load:0, state:'idle', t:0}; save(); $('menu').classList.add('hidden'); closeSheet();
+};
+
+// ═════ 메인 루프 ═════
+let last = performance.now(), uiT = 0, saveT = 0, errCount = 0;
+function loop(t){
+  now = t;
+  const dt = Math.min(0.1, (t - last) / 1000); last = t;
+  // 한 프레임에서 오류가 나도 게임 전체가 멈추지 않게
+  try{ if(W > 0 && !S.night && $('ending').classList.contains('hidden')) update(dt); }
+  catch(err){ console.error('[update]', err); errCount++; }
+  try{ if(W > 0) draw(); }
+  catch(err){ console.error('[draw]', err); errCount++; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; }
+  uiT += dt; if(uiT > 0.2){ uiT = 0; refresh(); }
+  saveT += dt; if(saveT > 5){ saveT = 0; save(); }
+  requestAnimationFrame(loop);
+}
+document.addEventListener('visibilitychange', () => { if(document.hidden) save(); });
+window.addEventListener('pagehide', save);
+$('repayBtn').onclick = repay;
+$('menuRepay').onclick = repay;
+$('nextDay').onclick = nextDay;
+$('endContinue').onclick = () => $('ending').classList.add('hidden');
+$('endNew').onclick = () => { S = fresh(); manual = 0; ants.clear(); crowds.clear(); leaving.length = 0; outflow.length = 0; batchCarry = 0; combo = 0; fx.truck = {load:0, state:'idle', t:0}; save(); $('ending').classList.add('hidden'); closeSheet(); };
+resize(); refresh(); requestAnimationFrame(loop);
+if(S.night) showReport();
+
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
