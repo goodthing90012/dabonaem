@@ -487,8 +487,17 @@ const SFX = (() => {
     const g = ac.createGain(); env(g, t, peak, 0.003, decay);
     o.connect(g).connect(master); o.start(t); o.stop(t + decay + 0.02);
   }
+  let lastPack = 0, packStep = 0;
   return {
     unlock: ensure,
+    // 📦 상자 포장 완료: 테이프 '착' + 통통 튀는 뽁 (연달아 나면 음이 조금씩 올라감, 너무 잦으면 건너뜀)
+    pack(){ if(!ensure()) return; const t = ac.currentTime;
+      if(t - lastPack < 0.07) return;
+      packStep = t - lastPack < 0.6 ? (packStep + 1) % 8 : 0; lastPack = t;
+      const f = 520 * Math.pow(1.06, packStep);
+      noiseHit(t, 'highpass', 2500, 0.7, 0.18, 0.04);
+      tone(t + 0.01, 'sine', f * 1.6, f, 0.22, 0.09);
+      tone(t + 0.01, 'triangle', f * 0.5, f * 0.45, 0.12, 0.07); },
     // 다이얼 딸깍: 짧고 건조한 금속 클릭
     tick(){ if(!ensure()) return; const t = ac.currentTime;
       noiseHit(t, 'bandpass', 3000 + Math.random() * 900, 9, 0.45, 0.025);
@@ -1428,6 +1437,15 @@ function drawRackRaw(){
 const ants = new Map();          // order.id → {x, y, ph, mv, hidden}
 let slots = [], antSpawn = {x:0, y:0};
 // 피킹존에서 패킹존으로 넘어오는 경계선 위의 랜덤한 점 (한 줄이 아니라 넓게 퍼져서 오게)
+// 자기 자리(x,y)에서 레일 반대쪽으로 쭉 나간 패킹존 가장자리 → 거기서 출발하면 레일을 가로지르지 않고 사방에서 몰려옴
+function edgeFrom(x, y){
+  const z = L.pack, a = Math.atan2(y - cy, x - cx) + (Math.random() - 0.5) * 0.35, ux = Math.cos(a), uy = Math.sin(a);
+  let t = 1e9;
+  if(ux > 0) t = Math.min(t, (z.x + z.w - 6 - cx) / ux); if(ux < 0) t = Math.min(t, (z.x + 6 - cx) / ux);
+  if(uy > 0) t = Math.min(t, (z.y + z.h - 6 - cy) / uy); if(uy < 0) t = Math.min(t, (z.y + R * 0.6 - cy) / uy);
+  const px = cx + ux * t, py = cy + uy * t;
+  return inExitLane(px, py) ? spawnPt() : {x:px, y:py};
+}
 function spawnPt(){
   // 사방에서 몰려옴: 40%는 피킹존 쪽, 나머지는 패킹존 가장자리 아무 데서나 (출구 레인 쪽만 피해서)
   const pk = L.pick, pz = L.pack, m = R * 0.35;
@@ -1497,7 +1515,7 @@ function buildDotSlots(){
       if(inExitLane(x, y)) continue;
       // 덩어리 없이: 입구 쪽부터 레일을 따라 고르게 둘러싸며 쌓임
       let da = ((a - ea) % TAU + TAU) % TAU; if(da > Math.PI) da = TAU - da;
-      ground.push({x, y, p:da * 0.9 + (rk - RR) / R * 1.07 + Math.random() * 0.15});
+      ground.push({x, y, p:(rk - RR) / R * 0.3 + Math.random() * 2.2});   // 출구 레인만 빼고 패킹존 전체에 골고루 흩뿌림
     }
   }
   ground.sort((a, b) => a.p - b.p);
@@ -1551,7 +1569,7 @@ function updateDots(dt){
         const src2 = keep ? (j % keep) : -1;
         if(src2 >= 0){ c.xs[j] = c.xs[src2] + (Math.random() - 0.5) * 6; c.ys[j] = c.ys[src2] + (Math.random() - 0.5) * 4; c.ls[j] = c.ls[src2]; }
         else if(a){ c.xs[j] = a.x + (Math.random() - 0.5) * 6; c.ys[j] = a.y + (Math.random() - 0.5) * 4; }
-        else { const sp = spawnPt(); c.xs[j] = sp.x; c.ys[j] = sp.y; }   // 점마다 제각각 다른 곳에서 출발 (뭉치지 않고 흩어져서 옴)
+        else { const sl = dotSlots[d + j], sp = sl ? edgeFrom(sl.x, sl.y) : spawnPt(); c.xs[j] = sp.x; c.ys[j] = sp.y; }   // 점마다 제각각 다른 곳에서 출발 (뭉치지 않고 흩어져서 옴)
       }
       crowds.set(o.id, c);
     }
@@ -1742,10 +1760,10 @@ function updateAnts(dt){
   S.orders.forEach((o, i) => {
     if(!isTote(o, i)){ ants.delete(o.id); return; }
     let a = ants.get(o.id);
-    if(!a){ const sp = spawnPt(); a = {x:sp.x, y:sp.y, l:0, ph:Math.random() * TAU, mv:1, hidden:false}; ants.set(o.id, a); }
     const s = SL[i];
+    if(!a){ const sp = s ? edgeFrom(s.x, s.y) : spawnPt(); a = {x:sp.x, y:sp.y, l:0, ph:Math.random() * TAU, mv:1, hidden:false}; ants.set(o.id, a); }
     if(!s){ a.hidden = true; a.l = 0; return; }
-    if(a.hidden){ const sp2 = spawnPt(); a.x = sp2.x; a.y = sp2.y; }   // 다시 나타날 땐 패킹존 가장자리에서 (다른 존을 가로지르지 않게)
+    if(a.hidden){ const sp2 = edgeFrom(s.x, s.y); a.x = sp2.x; a.y = sp2.y; }   // 다시 나타날 땐 패킹존 가장자리에서 (다른 존을 가로지르지 않게)
     a.hidden = false;
     a.l += (s.l - a.l) * Math.min(1, dt * 7);
     const dx = s.x - a.x, dy = s.y - a.y, d = Math.hypot(dx, dy);
@@ -1773,7 +1791,7 @@ function slotsFor(k){
       if(x < z.x + 8 || x > z.x + z.w - 8 || y < z.y + 32 || y > z.y + z.h - 8) continue;
       if(inExitLane(x, y)) continue;
       let da = ((a - ea) % TAU + TAU) % TAU; if(da > Math.PI) da = TAU - da;
-      ground.push({x, y, p:da + (rk - RR) / R * 1.07});
+      ground.push({x, y, p:(rk - RR) / R * 0.35 + Math.random() * 2.0});   // 출구 레인만 빼고 전체에 흩뿌림
     }
     if(ground.length > TOTE_MAX * 3) break;
   }
@@ -2465,6 +2483,7 @@ function packBatch(byHand, frac = 1){
   fx.pop = 1;
   spawnOutflow(Math.max(1, batchDots));     // 들어간 점 개수만큼 1:1로 택배가 나감
   turnPay += sumPay; turnN += sumN; turnCnt += cnt;
+  SFX.pack();
 }
 cv.addEventListener('pointerdown', e => {
   SFX.unlock();
@@ -2783,8 +2802,10 @@ function refresh(){
       }
     }
     const narrow = innerWidth < 520 && eta;
-    const right = narrow && S.st < STAGES.length ? `${stg.icon} ${fmtN(S.served)}/${fmtN(stg.goal)}` : left;
-    const g = `<span>🌍 ${narrow ? '' : '인류의 '}${pct}% · ⭐${(S.rating || 4).toFixed(1)}${eta}</span><span>${right}</span>`;
+    // 좁은 화면에서도 단계 이름(서울·대한민국…)은 꼭 보이게 — 대신 별점·힌트 글자를 줄임
+    const right = narrow && S.st < STAGES.length ? `${stg.icon} ${stg.name} ${fmtN(S.served)}/${fmtN(stg.goal)}` : left;
+    const etaN = narrow ? eta.replace(' 💡📈물량↑', ' 💡📈').replace('지금 속도론 2시간+', '2시간+') : eta;
+    const g = `<span>🌍 ${narrow ? '' : '인류의 '}${pct}%${narrow ? '' : ` · ⭐${(S.rating || 4).toFixed(1)}`}${etaN}</span><span>${right}</span>`;
     const gt = $('goalText'); if(gt._h !== g){ gt.innerHTML = g; gt._h = g; }
     $('goalFill').style.width = (k * 100).toFixed(1) + '%';
   }
