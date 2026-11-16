@@ -635,6 +635,7 @@ function endDay(){
     net:t.revenue - t.stock - t.penalty - t.mkt - fixed}, t);
   S.revHist = (S.revHist || []).concat([t.revenue]).slice(-3);
   const j = judgeDay(t);
+  S.report.shipM = shipMult();
   S.report.warn = j.warn || []; S.report.limit = debtLimit(); S.report.crate = cancelRate(t); S.report.unship = staleN(); S.report.expired = S.today.expired || 0;
   S.night = true; drag = null;
   closeSheet();
@@ -649,6 +650,7 @@ function showReport(){
     ${row('📦 출고', fmtN(r.units || r.shipped) + '건' + ((r.units || 0) > r.shipped ? ` (${r.shipped.toLocaleString('ko-KR')}묶음)` : ''))}
     ${row('❌ 취소 · ⏰ 지연', `${r.cancelled}건 · ${r.late}건`)}
     ${row('💰 매출', '+' + fmt(r.revenue), 'plus')}
+    ${r.shipBonus >= 1 ? row(`　└ 🚚 택배 단가·계약 효과 (×${(r.shipM || 1).toFixed(2)})`, '+' + fmt(r.shipBonus), 'plus') : ''}
     ${row('📥 입고비', '-' + fmt(r.stock), 'minus')}
     ${r.mkt ? row('📣 마케팅·부스트', '-' + fmt(r.mkt), 'minus') : ''}
     ${r.penalty ? row('📋 위약금', '-' + fmt(r.penalty), 'minus') : ''}
@@ -753,7 +755,8 @@ function complete(o, x, y, byHand, quiet){
   }
   const pay = Math.round(orderPay(o) * (byHand ? 1 + comboBonus() : 1));
   S.stock--; S.money += pay; S.earned += pay; S.shipped++;
-  S.today.shipped++; S.today.units = (S.today.units || 0) + (o.n || 1); S.today.revenue += pay; S.served += (o.n || 1);
+  S.today.shipped++; S.today.units = (S.today.units || 0) + (o.n || 1); S.today.revenue += pay;
+  S.today.shipBonus = (S.today.shipBonus || 0) + Math.max(0, pay - pay / shipMult());   // 택배 단가 협상·택배사 계약으로 더 받은 돈 S.served += (o.n || 1);
   if(o.overdue) S.rBad += 0.5; else S.rGood += 1;
   const s = S.ch[o.ch]; s.rep = Math.min(1, s.rep + 0.02);
   if(o.br){ const ct = S.contracts.find(c => c.id === o.br); if(ct) ct.shipped++; }
