@@ -756,7 +756,8 @@ function complete(o, x, y, byHand, quiet){
   const pay = Math.round(orderPay(o) * (byHand ? 1 + comboBonus() : 1));
   S.stock--; S.money += pay; S.earned += pay; S.shipped++;
   S.today.shipped++; S.today.units = (S.today.units || 0) + (o.n || 1); S.today.revenue += pay;
-  S.today.shipBonus = (S.today.shipBonus || 0) + Math.max(0, pay - pay / shipMult());   // 택배 단가 협상·택배사 계약으로 더 받은 돈 S.served += (o.n || 1);
+  S.served += (o.n || 1);
+  S.today.shipBonus = (S.today.shipBonus || 0) + Math.max(0, pay - pay / shipMult());   // 택배 단가 협상·택배사 계약으로 더 받은 돈
   if(o.overdue) S.rBad += 0.5; else S.rGood += 1;
   const s = S.ch[o.ch]; s.rep = Math.min(1, s.rep + 0.02);
   if(o.br){ const ct = S.contracts.find(c => c.id === o.br); if(ct) ct.shipped++; }
