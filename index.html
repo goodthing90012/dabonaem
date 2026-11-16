@@ -330,7 +330,7 @@ const railMult = () => 1 + 0.35 * S.railLv;
 // 작업자는 레일이 돌 때만 같이 포장 → 한 바퀴당 처리 건수를 늘려줌
 const W_PER = 0.25, W_TRAIN = 0.15;   // 작업자 1명당 한 바퀴 +0.25건, 교육 레벨당 작업자 몫 +15%
 // 한 바퀴에 포장하는 묶음 수 ×2 (1묶음 크기를 절반으로 줄인 만큼 처리량도 두 배 → 많이 처리할수록 그대로 더 벌림)
-const PER_M = 2;
+const PER_M = 1;   // 기본 처리량은 낮게 → 주문이 쌓이고, 업그레이드는 '속도'로 따라잡음
 const perRevBase = () => PER_M * (SCALE + S.workers * W_PER * (1 + W_TRAIN * S.trainLv));
 const RAILS = [
   {name:'롤러 레일',            mult:1,   st:0, cost:0},
@@ -354,8 +354,11 @@ const fever = () => feverT > 0;
 const rushCost = () => r100(Math.max(3000 * curN(), perMinute() * 0.6));
 const perRev = () => perRevBase() * RAILS[railTier()].mult * lines() * (rushT > 0 ? RUSH_MULT : 1) * (fever() ? FEVER_MULT : 1);
 const needRad = () => TAU / perRev();
+// ⚙️ 기어비: 새 레일·포장 라인은 '한 번에 처리하는 양' 대신 레일이 도는 속도를 올림 (손 한 바퀴 → 레일 여러 바퀴)
+const gear = () => RAILS[railTier()].mult * lines();
+const SLICES = 8;   // 레일 1/8바퀴마다 조금씩 포장 (한 바퀴 다 돌 때 한꺼번에 사라지지 않게)
 // 자동 회전 모터 (아시아 단계~): 손을 뗐을 때 최대 속도의 20/25/30%로 혼자 돎
-const AUTO_ROT = [0, 0.05, 0.08, 0.12, 0.16, 0.2];   // 손 뗐을 때 최대 속도의 5~20% (손으로 돌리는 게 훨씬 빠르게)
+const AUTO_ROT = [0, 0.08, 0.12, 0.16, 0.2, 0.25];   // 손 뗐을 때 최대 속도의 5~20% (손으로 돌리는 게 훨씬 빠르게)
 const AR_ST = 1;                                          // 🏙️ 서울 단계부터 살 수 있음 (Lv.4~5는 아시아부터)
 const arMax = () => S.st >= 3 ? 5 : 3;
 const autoRotPct = () => AUTO_ROT[Math.min(5, S.autoRotLv || 0)];
@@ -2077,7 +2080,7 @@ function drawPack(){
   // 작업자 (레일이 돌 때만 같이 포장)
   const tgtW = playerTarget();
   for(let i = 0; i < S.workers; i++){
-    const p = workerPos(i), working = railMoveT > 0 && !!tgtW, prog = tgtW ? Math.min(1, manual / TAU) : 0;
+    const p = workerPos(i), working = railMoveT > 0 && !!tgtW, prog = tgtW ? Math.min(1, (sliceN + manual / (TAU / SLICES)) / (SLICES * gear())) : 0;
     items.push({y:p.y, draw:() => {
       chibi(p.x, p.y - R * 0.2, R * 0.55, '#f97316', '#facc15', working ? Math.abs(Math.sin(now / 120 + i)) * 2 : 0);
       ctx.fillStyle = '#a16207'; ctx.strokeStyle = OUT; ctx.lineWidth = 1.2;
@@ -2086,7 +2089,7 @@ function drawPack(){
     }});
   }
   // 플레이어 + 포장대
-  const tgt = playerTarget(), prog = tgt ? manual / TAU : 0;
+  const tgt = playerTarget(), prog = tgt ? (sliceN + manual / (TAU / SLICES)) / (SLICES * gear()) : 0;
   items.push({y:cy, draw:() => {
     chibi(cx, cy - R * 0.5, R * 0.85, '#3b82f6', '#fde047', playerBob * 3);
     const tw = R * 1.7;
@@ -2408,25 +2411,41 @@ function startRush(){
   SFX.ding(4); setTimeout(() => SFX.ding(9), 120);
   return true;
 }
+let batchCarry = 0, batchDots = 0;
+let sliceN = 0, turnN = 0, turnPay = 0, turnCnt = 0;
 function packRotate(rad, dir, byHand){
-  railAngle += rad * dir;
+  const g = gear(), rr2 = rad * g;
+  railAngle += rad * Math.min(g, 3) * dir;   // 보이는 회전은 최대 3배까지만 (너무 빨리 돌면 눈 아픔)
   railMoveT = 0.25;
   const o = playerTarget();
   if(!o){
     if(byHand){ hintMsg = (S.stock <= 0 && S.orders.length) ? '재고가 없어요! 적치 랙을 탭해서 입고' : '대기 중인 주문이 없어요'; hintT = 1.2; }
     return;
   }
-  manual += rad;
-  while(manual >= TAU){                       // 한 바퀴 완성 → 그 바퀴 물량을 한꺼번에 포장
-    manual -= TAU;
-    packBatch(byHand);
+  manual += rr2;
+  const SL = TAU / SLICES;
+  while(manual >= SL){                        // 레일 1/8바퀴마다 그 몫만큼 포장 → 산이 앞에서부터 깎여 나감
+    manual -= SL;
+    packBatch(byHand, 1 / (SLICES * g));
+    if(++sliceN >= SLICES * g){ sliceN = 0; turnDone(byHand); }
     if(!playerTarget()){ manual = 0; break; }
   }
 }
-// 한 번에 포장: 한 바퀴 처리량(perRev)만큼 묶음을 동시에 처리
-let batchCarry = 0, batchDots = 0;
-function packBatch(byHand){
-  let cap = perRev() + batchCarry, cnt = 0, sumN = 0, sumPay = 0;
+// 손 한 바퀴 분량이 끝날 때: 콤보·효과음·금액 표시는 여기서 한 번만
+function turnDone(byHand){
+  if(!turnCnt) return;
+  fx.texts.push({x:cx - R * 0.15, y:cy - R * 0.7, text:`+${fmt(turnPay)} · ${fmtN(turnN)}건`, color:'#16a34a', life:1.3});
+  turnPay = 0; turnN = 0; turnCnt = 0;
+  if(!byHand) return;
+  combo++; comboT = COMBO_GAP; comboPop = 1;
+  if(combo >= FEVER_COMBO) startFever();
+  SFX.clunk();
+  if(combo % 10 === 0) SFX.ding(combo / 10);
+  if(combo > (S.maxCombo || 0)) S.maxCombo = combo;
+  if(navigator.vibrate) try{ navigator.vibrate(18); }catch(e){}
+}
+function packBatch(byHand, frac = 1){
+  let cap = perRev() * frac + batchCarry, cnt = 0, sumN = 0, sumPay = 0;
   batchDots = 0;
   while(true){
     const t = playerTarget();
@@ -2436,18 +2455,11 @@ function packBatch(byHand){
     if(!pay) break;
     cap -= (t.size || 1); cnt++; sumN += n; sumPay += pay;
   }
-  batchCarry = playerTarget() ? Math.min(cap, 1.5) : 0;      // 남은 몫은 다음 바퀴로 조금만 이월
+  batchCarry = playerTarget() ? Math.min(cap, 1.5) : 0;      // 남은 몫은 다음 조각으로 이월
   if(!cnt) return;
   fx.pop = 1;
   spawnOutflow(Math.max(1, batchDots));     // 들어간 점 개수만큼 1:1로 택배가 나감
-  fx.texts.push({x:cx - R * 0.15, y:cy - R * 0.7, text:`+${fmt(sumPay)} · ${fmtN(sumN)}건`, color:'#16a34a', life:1.3});
-  if(!byHand) return;
-  combo++; comboT = COMBO_GAP; comboPop = 1;
-  if(combo >= FEVER_COMBO) startFever();
-  SFX.clunk();
-  if(combo % 10 === 0) SFX.ding(combo / 10);
-  if(combo > (S.maxCombo || 0)) S.maxCombo = combo;
-  if(navigator.vibrate) try{ navigator.vibrate(18); }catch(e){}
+  turnPay += sumPay; turnN += sumN; turnCnt += cnt;
 }
 cv.addEventListener('pointerdown', e => {
   SFX.unlock();
@@ -2653,14 +2665,14 @@ ROWS.pack.push(
   {color:'#0f172a', up:() => { const nx = RAILS[railTier() + 1]; return !!nx && nx.st <= S.st; },
    title:() => { const nx = RAILS[railTier() + 1]; return nx ? `🚝 새 레일: ${nx.name}` : `🚝 ${RAILS[railTier()].name} (최고 레일)`; },
    desc:() => { const cur = RAILS[railTier()], nx = RAILS[railTier() + 1];
-     if(!nx) return `한 바퀴 처리량 ×${cur.mult} · 더 좋은 레일은 없어요`;
+     if(!nx) return `레일 속도 ×${cur.mult} · 더 좋은 레일은 없어요`;
      if(nx.st > S.st) return `🔒 ${STAGES[nx.st].icon} ${STAGES[nx.st].name} 단계에서 살 수 있어요 · 지금 ${cur.name} ×${cur.mult}`;
-     return `${cur.name} ×${cur.mult} → ${nx.name} ×${nx.mult} (한 바퀴 처리량) · 📈 물량 단위 ×${TIER_N} · 관성 +${(0.25 * Math.log(Math.max(1.01, maxRev() / 0.04))).toFixed(1)}초 · 유지비 일 +${fmt(Math.round((nx.cost - cur.cost) * UPKEEP * curN()))}`; },
+     return `${cur.name} ×${cur.mult} → ${nx.name} ×${nx.mult} (레일이 더 빨리 돌며 포장) · 📈 물량 단위 ×${TIER_N} · 관성 +${(0.25 * Math.log(Math.max(1.01, maxRev() / 0.04))).toFixed(1)}초 · 유지비 일 +${fmt(Math.round((nx.cost - cur.cost) * UPKEEP * curN()))}`; },
    btn:() => { const nx = RAILS[railTier() + 1]; return !nx ? 'MAX' : nx.st > S.st ? '🔒' : fmt(railTierCost()); },
    ok:() => { const nx = RAILS[railTier() + 1]; return !!nx && nx.st <= S.st && S.money >= railTierCost(); },
-   once:true, act:() => { S.money -= railTierCost(); S.railTier = railTier() + 1; say(`🚝 ${RAILS[railTier()].name} 설치 완료! 처리량 ×${RAILS[railTier()].mult}`, '#0f172a', 2.2); fx.confetti = 1.2; SFX.ding(6); }},
+   once:true, act:() => { S.money -= railTierCost(); S.railTier = railTier() + 1; say(`🚝 ${RAILS[railTier()].name} 설치 완료! 레일 속도 ×${RAILS[railTier()].mult}`, '#0f172a', 2.2); fx.confetti = 1.2; SFX.ding(6); }},
   {color:'#0ea5e9', up:true, title:() => `🛤️ 포장 라인 증설 (${lines()}라인)`,
-   desc:() => `한 바퀴 처리량 ×${lines()} → ×${lines() + 1} (= ${fmtN(perRevBase() * RAILS[railTier()].mult * lines() * curN())}건 → ${fmtN(perRevBase() * RAILS[railTier()].mult * (lines() + 1) * curN())}건) · 유지비 일 +${fmt(Math.round(lineCost() * UPKEEP))}`,
+   desc:() => `포장 속도 ×${lines()} → ×${lines() + 1} (손 한 바퀴에 ${fmtN(perRevBase() * RAILS[railTier()].mult * lines() * curN())}건 → ${fmtN(perRevBase() * RAILS[railTier()].mult * (lines() + 1) * curN())}건) · 유지비 일 +${fmt(Math.round(lineCost() * UPKEEP))}`,
    btn:() => fmt(lineCost()), ok:() => S.money >= lineCost(),
    act:() => { S.money -= lineCost(); S.lineLv = (S.lineLv || 0) + 1; say(`🛤️ ${lines()}번 라인 가동!`, '#0369a1', 1.6); }},
   {color:'#3b82f6', up:true, title:() => `레일 모터 Lv.${S.railLv}`,
