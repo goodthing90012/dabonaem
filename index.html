@@ -1429,21 +1429,10 @@ const ants = new Map();          // order.id → {x, y, ph, mv, hidden}
 let slots = [], antSpawn = {x:0, y:0};
 // 피킹존에서 패킹존으로 넘어오는 경계선 위의 랜덤한 점 (한 줄이 아니라 넓게 퍼져서 오게)
 function spawnPt(){
-  const pk = L.pick, pz = L.pack, r = Math.random(), lane = R * 0.9;
-  // 55% 위쪽 존들(피킹 쪽) · 30% 좌우 가장자리 · 15% 출구 쪽 가장자리(출구 레인만 피해서)
-  if(landscape){
-    if(r < 0.55) return {x:pz.x + R * 0.6 + Math.random() * R * 0.6, y:Math.max(pz.y + R, pk.y + 10 + Math.random() * (pk.h - 20))};   // 피킹존 옆에서만 (적치존 쪽 X)
-    if(r < 0.85){ const top = Math.random() < 0.5; return {x:pz.x + 20 + Math.random() * (pz.w - 40), y:top ? pz.y + 30 + Math.random() * 8 : pz.y + pz.h - 4 - Math.random() * 8}; }
-    const E = exitPoint(); let y; do { y = pz.y + 30 + Math.random() * (pz.h - 40); } while(Math.abs(y - E.y) < lane);
-    return {x:pz.x + pz.w - 4 - Math.random() * 8, y};
-  }
-  if(r < 0.55){
-    // 피킹존 바로 아래에서만 나옴 (입하·적치존 밑에서는 안 나오게) + 존 테두리에 겹치지 않게 조금 아래로
-    return {x:pk.x + 10 + Math.random() * (pk.w - 20), y:pz.y + R * 0.55 + Math.random() * R * 0.5};
-  }
-  if(r < 0.85){ const left = Math.random() < 0.5; return {x:left ? pz.x + 4 + Math.random() * 8 : pz.x + pz.w - 4 - Math.random() * 8, y:pz.y + 30 + Math.random() * (pz.h - 40)}; }
-  const E = exitPoint(); let x; do { x = pz.x + 10 + Math.random() * (pz.w - 20); } while(Math.abs(x - E.x) < lane);
-  return {x, y:pz.y + pz.h - 4 - Math.random() * 8};
+  // 주문은 전부 피킹존 쪽에서만 넓게 퍼져 나옴 (화면 가장자리에서 한 줄로 걸어오던 것 제거)
+  const pk = L.pick, pz = L.pack;
+  if(landscape) return {x:pz.x + R * 0.6 + Math.random() * R * 0.9, y:Math.max(pz.y + R, pk.y + 10 + Math.random() * (pk.h - 20))};
+  return {x:pk.x + 10 + Math.random() * (pk.w - 20), y:pz.y + R * 0.55 + Math.random() * R * 0.6};
 }
 let pileEA = 0, rushBtn = null, exitA = Math.PI / 2;
 // 출구 레인 근처인지 (레일 바깥에서 출구 방향 ±32° 안쪽 + 레인 폭) → 거기엔 산을 안 쌓음
