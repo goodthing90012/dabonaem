@@ -2318,6 +2318,15 @@ $('menuBtn').onclick = () => {
   $('menu').classList.remove('hidden');
 };
 $('closeMenu').onclick = () => $('menu').classList.add('hidden');
+// 메뉴: 바깥(어두운 배경)을 누르면 닫힘
+$('menu').addEventListener('pointerdown', e => { if(e.target === $('menu')) $('menu').classList.add('hidden'); });
+// 업그레이드 시트: 시트 바깥 아무 데나 누르면 닫힘 (시트를 여는 버튼은 제외 — 그 버튼이 직접 열고 닫음)
+document.addEventListener('pointerdown', e => {
+  if(!sheet) return;
+  const t = e.target;
+  if(t.closest && (t.closest('#sheet') || t.closest('#salesBtn') || t.closest('#mktBtn'))) return;
+  closeSheet();
+}, true);
 $('resetBtn').onclick = () => {
   if(!resetArm){ resetArm = true; $('resetBtn').textContent = '정말요? 한 번 더 누르면 초기화'; return; }
   S = fresh(); manual = 0; ants.clear(); crowds.clear(); leaving.length = 0; outflow.length = 0; batchCarry = 0; $('report').classList.add('hidden'); fx.truck = {load:0, state:'idle', t:0}; save(); $('menu').classList.add('hidden'); closeSheet();
