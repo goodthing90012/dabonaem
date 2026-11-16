@@ -203,7 +203,8 @@ const STAGES = [
   {name:'전 인류',   icon:'🌍', goal:WORLD},
 ];
 const AUTO_BASE = 3000, AUTO_G = 6, AUTO_M = 1.25, STAGE_BOOST = 3; // 봇 시뮬레이션 튜닝: 잘하면 ~55분, 보통 ~60분, 자동화를 덜 사도 ~113분
-const CH_N = 1.18, TIER_N = 1.3, PRICE_M = 1.6;    // 채널 연동·새 레일도 물량 단위를 키움 · 단가 +60%
+const CH_N = 1.18, TIER_N = 1.3, PRICE_M = 1.6, IN_M = 1.5;   // IN_M: 모든 채널 주문 유입 ×1.5
+    // 채널 연동·새 레일도 물량 단위를 키움 · 단가 +60%
 const AUTO_NAMES = ['포장 작업대', '핸드 스캐너', '컨베이어', '자동 포장기', '소터', 'AGV 로봇', '로봇 피킹', '다크 팩토리', '글로벌 풀필먼트'];
 const SCALE = 3;                 // 물량 배율: 주문 ×3, 건당 금액 ÷3, 원 한 바퀴 = 3건
 const UNIT_COST = 100, SAVE_KEY = 'dabonaettung-v1', TAU = Math.PI * 2;
@@ -405,7 +406,7 @@ const repeatRate = () => 0.3 * Math.log10(1 + (S.served || 0) / 500);
 function chRate(c, withEv = true){
   const s = S.ch[c.id]; if(!s.lv) return 0;
   const burst = c.burst ? (withEv ? ((S.playTime % 30) < 5 ? 6 : 0) : 1) : 1;   // 틱톡: 30초 중 5초만 ×6
-  return c.rate * (1 + 0.4 * (s.lv - 1)) * (0.35 + 0.65 * s.rep) * burst * ratingMult() * adMult() * (withEv ? evMult(c.id) : 1);
+  return IN_M * c.rate * (1 + 0.4 * (s.lv - 1)) * (0.35 + 0.65 * s.rep) * burst * ratingMult() * adMult() * (withEv ? evMult(c.id) : 1);
 }
 const r100 = v => Math.round(v / 100) * 100;
 function chCost(c){ const s = S.ch[c.id]; return s.lv ? upc((c.unlock || 1500) * 0.7 * Math.pow(1.6, s.lv - 1)) : upc(c.unlock); }
@@ -2590,7 +2591,7 @@ CH.forEach(c => ROWS.channel.push({
     if(c.via && !S.ch[c.via].lv) return '플레이오토 연동 후 열려요';
     const tr = c.trait ? c.trait + ' · ' : '';
     const fee = c.id === 'excel' ? '' : ` · 연동료 일 ${fmt(chFeeOne(c, s.lv + 1))}`;
-    if(!s.lv) return `${tr}${c.via ? '플레이오토 연동 · ' : ''}분당 약 ${(c.rate * 60).toFixed(0)}건 · 건당 ${fmt(Math.round(c.price * PRICE_M))} · 📈 물량 단위 ×${CH_N}${fee}`;
+    if(!s.lv) return `${tr}${c.via ? '플레이오토 연동 · ' : ''}분당 약 ${(c.rate * IN_M * 60).toFixed(0)}건 · 건당 ${fmt(Math.round(c.price * PRICE_M))} · 📈 물량 단위 ×${CH_N}${fee}`;
     return `${tr}분당 ${(chRate(c, false) * 60).toFixed(1)}건 · 건당 ${fmt(Math.round(c.price * PRICE_M))} · 평판 ${Math.round(s.rep * 100)}%${c.id === 'excel' ? '' : ` · 연동료 일 ${fmt(chFeeOne(c, s.lv))}→${fmt(chFeeOne(c, s.lv + 1))}`}`;
   },
   btn:() => (S.ch[c.id].lv ? '마케팅 ' : '연동 ') + fmt(chCost(c)),
