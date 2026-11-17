@@ -125,6 +125,9 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
 #spinBtn{background:#eff6ff;color:#1d4ed8}
 #soundBtn{background:#f4f4f5;color:#27272a}
 #resetBtn{background:#fee2e2;color:#991b1b}
+#perkToast{position:fixed;left:50%;top:96px;transform:translateX(-50%);z-index:9;background:#1e1b4b;color:#fff;border-radius:14px;padding:10px 14px;font-size:13px;font-weight:700;line-height:1.5;max-width:min(420px,92vw);text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.25);transition:opacity .4s;pointer-events:none}
+#perkToast.hide{opacity:0}
+#wipeBtn{background:#fff;color:#b91c1c;border:1.5px solid #fca5a5 !important;font-size:12.5px !important}
 @media (max-width:430px){
   #hud{gap:4px;padding:7px 6px}
   .stat{padding:4px 6px;font-size:12px;gap:2px}
@@ -234,6 +237,7 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
     <button id="rbClose">닫기</button>
   </div>
 </div>
+<div id="perkToast" class="hide"></div>
 <div id="menu" class="hidden">
   <div class="box">
     <h2>📦 다보냄</h2>
@@ -247,6 +251,7 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
     <button id="closeMenu">계속하기</button>
     <p id="verText" style="text-align:center;font-size:11px;color:#a1a1aa;margin-top:8px"></p>
     <button id="resetBtn">처음부터 다시</button>
+    <button id="wipeBtn">🧨 완전 초기화 (명성·환생 보너스까지)</button>
   </div>
 </div>
 <script>
@@ -346,7 +351,7 @@ const saveMeta = () => { try{ localStorage.setItem(META_KEY, JSON.stringify(META
 const pl = k => META.p[k] || 0;
 const PERKS = [
   {k:'money',  max:6,  icon:'💰', name:'시작 자금',        cost:l => 2 + l * 2, desc:l => `처음 가진 돈 ${fmt(startMoney(l))} → ${fmt(startMoney(l + 1))}`},
-  {k:'ch',     max:3,  icon:'🛒', name:'처음부터 채널 연동', cost:l => 4 + l * 4, desc:l => `${['카페24', '+ 플레이오토', '+ 쿠팡'][l] || ''} 연동된 채로 시작`},
+  {k:'ch',     max:3,  icon:'🛒', name:'채널 연동 무료',     cost:l => 4 + l * 4, desc:l => `처음 연동하는 채널 ${l}개 → ${l + 1}개 무료`},
   {k:'motor',  max:5,  icon:'⚙️', name:'레일 모터 기본 속도', cost:l => 2 + l * 2, desc:l => `처음부터 레일 모터 Lv.${l * 2} → Lv.${(l + 1) * 2}`},
   {k:'workers',max:4,  icon:'👷', name:'시작 작업자',       cost:l => 4 + l * 3, desc:l => `처음부터 작업자 ${l}명 → ${l + 1}명`},
   {k:'price',  max:10, icon:'🚚', name:'건당 단가',         cost:l => 3 + l * 2, desc:l => `모든 주문 매출 +${l * 10}% → +${(l + 1) * 10}%`},
@@ -368,7 +373,7 @@ function fresh(){
 // 영구 보너스를 새 판에 적용
 function applyPerks(st){
   st.money = startMoney(pl('money'));
-  ['cafe24', 'playauto', 'coupang'].slice(0, pl('ch')).forEach(id => { if(st.ch[id]) st.ch[id].lv = 1; });
+  st.freeCh = pl('ch');   // 처음 연동하는 채널 N개 무료 (자동 연동 X → 단계 순서 안 꼬임)
   st.railLv = pl('motor') * 2;
   st.workers = pl('workers');
   st.autoRotLv = pl('autoRot');
@@ -404,7 +409,8 @@ function load(){
   return applyPerks(fresh());
 }
 let S = load();
-function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){} }
+let wiping = false;   // 완전 초기화 중엔 다시 저장하지 않음
+function save(){ if(wiping) return; try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){} }
 
 // ═════ 파생 수치 ═════
 const chDef = id => CH.find(c => c.id === id);
@@ -500,7 +506,7 @@ function chRate(c, withEv = true){
   return IN_M * (1 + 0.1 * pl('inflow')) * (isFinal() ? FINAL_IN : 1) * c.rate * (1 + 0.4 * (s.lv - 1)) * (0.35 + 0.65 * s.rep) * burst * ratingMult() * adMult() * (withEv ? evMult(c.id) : 1);
 }
 const r100 = v => Math.round(v / 100) * 100;
-function chCost(c){ const s = S.ch[c.id]; return s.lv ? upc((c.unlock || 1500) * 0.7 * Math.pow(1.6, s.lv - 1)) : upc(c.unlock); }
+function chCost(c){ const s = S.ch[c.id]; if(!s.lv && (S.freeCh || 0) > 0) return 0; return s.lv ? upc((c.unlock || 1500) * 0.7 * Math.pow(1.6, s.lv - 1)) : upc(c.unlock); }
 const capCost = () => upc(1500 * Math.pow(1.6, S.capLv));
 const capStep = () => Math.max(90, Math.round(S.cap * 0.35 / 10) * 10);   // 랙 확장: +90 또는 지금 크기의 35% 중 큰 쪽
 // 최근 재고 소모 속도 (묶음/초)
@@ -675,7 +681,7 @@ function doCutoff(h){
 // 🌙 18:00 정산: 고정비 차감, 모자라면 운영자금 대출
 // ═════ 게임 오버: 파산 · 고객 이탈 (경고 1번 → 다음 날도 그러면 끝, 그날 아침부터 재시작) ═════
 const MORNING_KEY = 'dabonaettung-morning';
-function saveMorning(){ try{ localStorage.setItem(MORNING_KEY, JSON.stringify(S)); }catch(e){} }
+function saveMorning(){ if(wiping) return; try{ localStorage.setItem(MORNING_KEY, JSON.stringify(S)); }catch(e){} }
 function debtLimit(){
   const h = S.revHist || [], avg = h.length ? h.reduce((a, b) => a + b, 0) / h.length : 0;
   return Math.max(dailyCost() * 4, avg * 3);
@@ -2778,9 +2784,9 @@ CH.forEach(c => ROWS.channel.push({
     if(!s.lv) return `${tr}${c.via ? '플레이오토 연동 · ' : ''}분당 약 ${(c.rate * IN_M * 60).toFixed(0)}건 · 건당 ${fmt(Math.round(c.price * PRICE_M))} · 📈 물량 단위 ×${CH_N}${fee}`;
     return `${tr}분당 ${(chRate(c, false) * 60).toFixed(1)}건 · 건당 ${fmt(Math.round(c.price * PRICE_M))} · 평판 ${Math.round(s.rep * 100)}%${c.id === 'excel' ? '' : ` · 연동료 일 ${fmt(chFeeOne(c, s.lv))}→${fmt(chFeeOne(c, s.lv + 1))}`}`;
   },
-  btn:() => (S.ch[c.id].lv ? '마케팅 ' : '연동 ') + fmt(chCost(c)),
+  btn:() => S.ch[c.id].lv ? '마케팅 ' + fmt(chCost(c)) : (chCost(c) === 0 ? `연동 무료 🎁${S.freeCh > 1 ? ' (' + S.freeCh + ')' : ''}` : '연동 ' + fmt(chCost(c))),
   ok:() => !(c.st > S.st) && !(c.via && !S.ch[c.via].lv) && S.money >= chCost(c),
-  act:() => { S.money -= chCost(c); S.ch[c.id].lv++; },
+  act:() => { const free = !S.ch[c.id].lv && (S.freeCh || 0) > 0; S.money -= chCost(c); S.ch[c.id].lv++; if(free) S.freeCh--; },
 }));
 ROWS.stock.push(
   {color:'#8b5cf6', title:() => '입고 +30개',
@@ -2984,7 +2990,29 @@ function refresh(){
 }
 
 // ═════ 메뉴 ═════
-let resetArm = false;
+let resetArm = false, wipeArm = false;
+// 새 판 시작 시 적용된 환생 보너스를 잠깐 보여 줌
+let perkToastT = 0;
+function showPerks(){
+  const a = [];
+  if(pl('money')) a.push('💰 시작 자금 ' + fmt(startMoney(pl('money'))));
+  if(pl('ch')) a.push('🛒 채널 ' + pl('ch') + '개 무료 연동');
+  if(pl('motor')) a.push('⚙️ 모터 Lv.' + pl('motor') * 2);
+  if(pl('workers')) a.push('👷 작업자 ' + pl('workers') + '명');
+  if(pl('price')) a.push('🚚 단가 +' + pl('price') * 10 + '%');
+  if(pl('inflow')) a.push('📦 주문 +' + pl('inflow') * 10 + '%');
+  if(pl('autoRot')) a.push('🔄 자동 회전 Lv.' + pl('autoRot'));
+  if(!a.length) return;
+  const el = $('perkToast'); el.innerHTML = '🌀 환생 보너스 적용<br>' + a.join(' · '); el.classList.remove('hide');
+  clearTimeout(perkToastT); perkToastT = setTimeout(() => el.classList.add('hide'), 4500);
+}
+// 완전 초기화: 진행·명성·환생 보너스·아침 저장·최고 기록까지 모두 지우고 새로 시작 (두 번 눌러야 실행)
+$('wipeBtn').onclick = () => {
+  if(!wipeArm){ wipeArm = true; $('wipeBtn').textContent = '⚠️ 명성까지 전부 지워져요 · 한 번 더 누르면 실행'; return; }
+  wiping = true;
+  try{ [SAVE_KEY, META_KEY, MORNING_KEY, BEST_KEY].forEach(k => localStorage.removeItem(k)); }catch(e){}
+  location.reload();
+};
 const SPIN = {ccw:'회전 방향: 반시계 ↺', cw:'회전 방향: 시계 ↻', both:'회전 방향: 양방향 ⟲⟳'};
 const SPIN_NEXT = {ccw:'cw', cw:'both', both:'ccw'};
 function soundLabel(){ $('soundBtn').textContent = S.sound ? '🔊 소리 켜짐' : '🔇 소리 꺼짐'; }
@@ -2993,7 +3021,7 @@ function spinLabel(){ $('spinBtn').textContent = SPIN[S.spin] || SPIN.ccw; }
 $('spinBtn').onclick = () => { S.spin = SPIN_NEXT[S.spin] || 'ccw'; spinLabel(); save(); };
 $('menuBtn').onclick = () => {
   $('statsText').innerHTML = `총 출고 <b>${fmtN(S.served)}</b>건 (${S.shipped.toLocaleString('ko-KR')}묶음) · 취소 <b>${S.cancelled.toLocaleString('ko-KR')}</b>건<br>누적 매출 <b>${fmt(S.earned)}</b> · 작업자 ${S.workers}명<br>플레이 ${fmtTime(S.playTime)} · 고객 ${fmtN(S.served)}명<br>최고 콤보 ${S.maxCombo || 0} · 화주사 계약 완료 ${S.contractsDone} · 해지 ${S.contractsFailed} · 위약금 ${fmt(S.penalties || 0)}`;
-  resetArm = false; $('resetBtn').textContent = '처음부터 다시'; spinLabel(); soundLabel(); repayLabel();
+  resetArm = false; $('resetBtn').textContent = '처음부터 다시'; wipeArm = false; $('wipeBtn').textContent = '🧨 완전 초기화 (명성·환생 보너스까지)'; spinLabel(); soundLabel(); repayLabel();
   $('menu').classList.remove('hidden');
 };
 $('closeMenu').onclick = () => $('menu').classList.add('hidden');
@@ -3008,7 +3036,7 @@ document.addEventListener('pointerdown', e => {
 }, true);
 $('resetBtn').onclick = () => {
   if(!resetArm){ resetArm = true; $('resetBtn').textContent = '정말요? 한 번 더 누르면 초기화'; return; }
-  S = applyPerks(fresh()); manual = 0; ants.clear(); crowds.clear(); leaving.length = 0; outflow.length = 0; batchCarry = 0; $('report').classList.add('hidden'); fx.truck = {load:0, state:'idle', t:0}; save(); saveMorning(); $('menu').classList.add('hidden'); closeSheet();
+  S = applyPerks(fresh()); manual = 0; ants.clear(); crowds.clear(); leaving.length = 0; outflow.length = 0; batchCarry = 0; $('report').classList.add('hidden'); fx.truck = {load:0, state:'idle', t:0}; save(); saveMorning(); $('menu').classList.add('hidden'); closeSheet(); showPerks();
 };
 
 // ═════ 메인 루프 ═════
@@ -3046,9 +3074,9 @@ $('repayBtn').onclick = repay;
 $('menuRepay').onclick = repay;
 $('nextDay').onclick = nextDay;
 $('goRetry').onclick = retryMorning;
-$('goNew').onclick = () => { S = applyPerks(fresh()); resetTransient(); save(); saveMorning(); $('gameover').classList.add('hidden'); closeSheet(); };
+$('goNew').onclick = () => { S = applyPerks(fresh()); resetTransient(); save(); saveMorning(); $('gameover').classList.add('hidden'); closeSheet(); showPerks(); };
 $('endContinue').onclick = () => $('ending').classList.add('hidden');
-$('endNew').onclick = () => { S = applyPerks(fresh()); manual = 0; ants.clear(); crowds.clear(); leaving.length = 0; outflow.length = 0; batchCarry = 0; combo = 0; fx.truck = {load:0, state:'idle', t:0}; save(); saveMorning(); $('ending').classList.add('hidden'); closeSheet(); };
+$('endNew').onclick = () => { S = applyPerks(fresh()); manual = 0; ants.clear(); crowds.clear(); leaving.length = 0; outflow.length = 0; batchCarry = 0; combo = 0; fx.truck = {load:0, state:'idle', t:0}; save(); saveMorning(); $('ending').classList.add('hidden'); closeSheet(); showPerks(); };
 // ═════ 🌀 환생 창 ═════
 let rbArm = 0;
 function renderRebirth(){
@@ -3077,7 +3105,7 @@ function openRebirth(){ rbArm = 0; $('menu').classList.add('hidden'); $('ending'
 function doRebirth(){
   const g = fameGain();
   META.fame += g; META.runs++; saveMeta();
-  S = applyPerks(fresh()); resetTransient(); save(); saveMorning();
+  S = applyPerks(fresh()); resetTransient(); save(); saveMorning(); showPerks();
   $('rebirth').classList.add('hidden'); closeSheet();
   say(`🌀 환생 완료! ⭐ +${g} 명성 — ${META.runs}회차 시작`, '#7c3aed', 3);
   SFX.ding(3);
@@ -3085,7 +3113,7 @@ function doRebirth(){
 }
 $('rebirthBtn').onclick = openRebirth;
 // 🔄 새로고침: 저장 → 저장해 둔 옛 버전 파일 지우기 → 최신 버전으로 다시 열기 (진행 상황은 그대로)
-const APP_VER = 'v112';
+const APP_VER = 'v114';
 $('verText').textContent = `다보냄 ${APP_VER}`;
 $('reloadBtn').onclick = async () => {
   $('reloadBtn').textContent = '⏳ 최신 버전 받는 중…';
