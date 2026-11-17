@@ -237,6 +237,7 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
 <div id="menu" class="hidden">
   <div class="box">
     <h2>📦 다보냄</h2>
+    <p style="margin-top:0;color:#2563eb;font-weight:700">⏸️ 잠시 멈춤 중 · 닫으면 이어서 진행</p>
     <p id="statsText"></p>
     <button id="menuRepay"></button>
     <button id="soundBtn"></button>
@@ -1579,14 +1580,15 @@ let dotSlots = [], dpp = 1, dotTopY = 0, dotUsed = 0;
 const crowds = new Map();          // order.id → {k, xs, ys, ls}
 // 주문 컨테이너: 물량이 늘수록 점점 작아지며 화면을 채우다가, TOTE_MAX묶음을 넘으면 작은 점 상자로 넘어감
 const TOTE_MAX = 600, OUT_MAX = 300;   // 이 개수까지는 상자로 그리고, 넘으면 점으로 (그 즈음엔 크기가 점과 거의 같음)
-let bigInOn = true, kIn = 1;
+let bigInOn = true, kIn = 1, kChar = 1;   // kChar: 작업자·나·포장대 배율 (컨테이너 따라 최소 0.65)
 let smallN = true;
 function frontN(){
   // 1묶음이 여러 건이 되면(후반) 컨테이너 대신 실제 건수만큼 점으로 → 산더미가 폭풍처럼 쌓여 보이게
   const cn = curN();
-  if(smallN && cn > 3.5) smallN = false; else if(!smallN && cn < 2.5) smallN = true;
-  if(!smallN) return 0;
   const n = S.orders.length;
+  // 후반이어도 처리해서 대기 묶음이 줄어들면 다시 컨테이너로 돌아와 시점이 가까워짐
+  if(smallN && cn > 3.5 && n > 160) smallN = false; else if(!smallN && (cn < 2.5 || n < 100)) smallN = true;
+  if(!smallN) return 0;
   if(bigInOn && n > TOTE_MAX) bigInOn = false;
   else if(!bigInOn && n < TOTE_MAX * 0.7) bigInOn = true;
   return bigInOn ? TOTE_MAX : 0;
@@ -1865,7 +1867,9 @@ function updateAnts(dt){
   // 큰 크기 그대로 화면(바닥 자리)이 거의 찰 때까지 늘어나다가, 그 뒤로 점점 작아짐
   const fill = Math.max(24, (slotsFor(1).ground || 100) * 0.25);   // 바닥이 1/4쯤 차면 벌써 작아지기 시작
   const tgtK = fitK(Math.min(S.orders.length, TOTE_MAX), fill);
-  kIn += (tgtK - kIn) * Math.min(1, dt * 1.2);            // 천천히 따라가서 덜컥거리지 않게
+  kIn += (tgtK - kIn) * Math.min(1, dt * (tgtK > kIn ? 1.8 : 1.2));   // 천천히 따라가서 덜컥거리지 않게 (가까워질 땐 조금 더 빨리)
+  { const km = kMinBox(), tc = F ? 0.65 + 0.35 * Math.max(0, Math.min(1, (kIn - km) / Math.max(0.01, 1 - km))) : 0.65;
+    kChar += (tc - kChar) * Math.min(1, dt * 1.5); }
   const SL = slotsFor(kIn);
   S.orders.forEach((o, i) => {
     if(!isTote(o, i)){ ants.delete(o.id); return; }
@@ -2215,21 +2219,25 @@ function drawPack(){
   for(let i = 0; i < S.workers; i++){
     const p = workerPos(i), working = railMoveT > 0 && !!tgtW, prog = tgtW ? Math.min(1, (sliceN + manual / (TAU / SLICES)) / (SLICES * gear())) : 0;
     items.push({y:p.y, draw:() => {
+      ctx.save(); ctx.translate(p.x, p.y); ctx.scale(kChar, kChar); ctx.translate(-p.x, -p.y);
       chibi(p.x, p.y - R * 0.2, R * 0.55, '#f97316', '#facc15', working ? Math.abs(Math.sin(now / 120 + i)) * 2 : 0);
       ctx.fillStyle = '#a16207'; ctx.strokeStyle = OUT; ctx.lineWidth = 1.2;
       rr(p.x - R * 0.36, p.y - R * 0.28, R * 0.72, R * 0.22, 3); ctx.fill(); ctx.stroke();
       boxPacking(p.x, p.y - R * 0.27, R * 0.36, prog);
+      ctx.restore();
     }});
   }
   // 플레이어 + 포장대
   const tgt = playerTarget(), prog = tgt ? (sliceN + manual / (TAU / SLICES)) / (SLICES * gear()) : 0;
   items.push({y:cy, draw:() => {
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(kChar, kChar); ctx.translate(-cx, -cy);
     chibi(cx, cy - R * 0.5, R * 0.85, '#3b82f6', '#fde047', playerBob * 3);
     const tw = R * 1.7;
     stamp(sprite('table' + Math.round(R * 10), tw + 6, R * 0.95, tw / 2 + 3, R * 0.9, (x0, y0) => block(x0, y0, tw, R * 0.42, R * 0.4, '#b45309', '#d97706', 2)), cx, cy + R * 0.5);
     const bs = R * 0.72 * (1 + fx.pop * 0.18);
     boxPacking(cx - R * 0.15, cy + R * 0.05, bs, prog);
     if(tgt) tote(cx + R * 0.58, cy + R * 0.02, R * 0.38, tgt.urgent ? '#ef4444' : chDef(tgt.ch).color, tgt.urgent);
+    ctx.restore();
   }});
   // 진행 링
   ctx.lineCap = 'round';
@@ -3077,7 +3085,7 @@ function doRebirth(){
 }
 $('rebirthBtn').onclick = openRebirth;
 // 🔄 새로고침: 저장 → 저장해 둔 옛 버전 파일 지우기 → 최신 버전으로 다시 열기 (진행 상황은 그대로)
-const APP_VER = 'v111';
+const APP_VER = 'v112';
 $('verText').textContent = `다보냄 ${APP_VER}`;
 $('reloadBtn').onclick = async () => {
   $('reloadBtn').textContent = '⏳ 최신 버전 받는 중…';
