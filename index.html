@@ -167,6 +167,9 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
 @media (max-width:370px){ .stat{font-size:11px;padding:4px 5px} .stat.money b{font-size:13px} }
 #clockStat{border:0;font-family:inherit;color:inherit;cursor:pointer}
 #clockStat:active{transform:translateY(1px)}
+#hoverBtn{display:none;border:0;background:#f4f4f5;border-radius:12px;width:36px;height:32px;font-size:16px;cursor:pointer;flex:0 0 auto}
+#hoverBtn.on{background:#dbeafe;box-shadow:inset 0 0 0 2px #3b82f6}
+@media (hover:hover) and (pointer:fine){ #hoverBtn{display:block} }
 </style>
 </head>
 <body>
@@ -177,6 +180,7 @@ html,body{height:100%;overflow:hidden;background:#e9ebef;color:#1f2937;
     <button class="stat" id="clockStat" aria-label="잠시 멈춤">⏸️<b id="clock">D1 09:00</b></button>
     <div id="boostBar"></div>
     <div class="sp"></div>
+    <button id="hoverBtn" aria-label="마우스만 돌리기">🖱️</button>
     <button id="salesBtn" aria-label="화주사 영업">📋<i></i></button>
     <button id="mktBtn" aria-label="마케팅">📣<i></i></button>
     <button id="menuBtn" aria-label="메뉴">⚙︎</button>
@@ -1491,8 +1495,11 @@ function drawInbound(){
   }
   label(z, '📥 입하', S.autoIn ? false : sheetBadge('stock'));
 }
+let rackSig = '', rackSigT = 0, rackEmpty = false;
 function drawRack(){
-  cachedZone('rack', L.rack, [S.stock, S.cap, S.capLv, S.autoIn, sheetBadge('stock'), S.inbT > 0 ? Math.ceil(S.inbT) + '/' + S.inbN : ''].join(), drawRackRaw);
+  // 재고 숫자는 0.25초마다만 다시 그림 (매 프레임 다시 그리면 오히려 무거움)
+  if(!rackSig || now - rackSigT > 250 || (S.stock <= 0) !== rackEmpty){ rackSigT = now; rackEmpty = S.stock <= 0; rackSig = [S.stock, S.cap, S.capLv, S.autoIn, sheetBadge('stock'), S.inbT > 0 ? Math.ceil(S.inbT) + '/' + S.inbN : ''].join(); }
+  cachedZone('rack', L.rack, rackSig, drawRackRaw);
 }
 function drawRackRaw(){
   const z = L.rack;
@@ -1566,11 +1573,12 @@ function inExitLane(x, y){
 const surge = {lv:0, t:0};
 const pileLbl = {x:0, y:0, t:'', lvl:-1, show:0};
 // ── 점 군중: 쌓인 건수만큼 실제 점을 그림 (최대 MAXDOTS개, 넘으면 1점 = 여러 건)
-const MAXDOTS = 5000, DOT_LIFT = 0.075;   // 점 최대 5,000개 (넘으면 1점 = 여러 건)
+const MAXDOTS = 5000, DOT_LIFT = 0.075;
+let dotsCap = 5000;   // 느린 기기에선 자동으로 3,000 → 2,000개까지 줄임   // 점 최대 5,000개 (넘으면 1점 = 여러 건)
 let dotSlots = [], dpp = 1, dotTopY = 0, dotUsed = 0;
 const crowds = new Map();          // order.id → {k, xs, ys, ls}
 // 주문 컨테이너: 물량이 늘수록 점점 작아지며 화면을 채우다가, TOTE_MAX묶음을 넘으면 작은 점 상자로 넘어감
-const TOTE_MAX = 600, OUT_MAX = 600;   // 이 개수까지는 상자로 그리고, 넘으면 점으로 (그 즈음엔 크기가 점과 거의 같음)
+const TOTE_MAX = 600, OUT_MAX = 300;   // 이 개수까지는 상자로 그리고, 넘으면 점으로 (그 즈음엔 크기가 점과 거의 같음)
 let bigInOn = true, kIn = 1;
 let smallN = true;
 function frontN(){
@@ -1644,15 +1652,16 @@ function updateDots(dt){
   let total = 0;
   for(let i = 0; i < S.orders.length; i++) if(!isTote(S.orders[i], i)) total += S.orders[i].n || 1;
   // 1점=몇 건 비율은 여유를 두고 가끔만 바꿈 (매 프레임 바뀌면 점 무리가 깜빡임)
-  const need = Math.max(1, Math.ceil(total / Math.max(1, dotSlots.length)));
+  const nSlots = Math.min(dotSlots.length, dotsCap);
+  const need = Math.max(1, Math.ceil(total / Math.max(1, nSlots)));
   if(need > dpp) dpp = need === 1 ? 1 : Math.ceil(need * 1.3);
   else if(dpp > 1 && need < dpp * 0.5) dpp = Math.max(1, Math.ceil(need * 1.3));
   const live = new Set();
   let d = 0, top = 1e9;
   const sp = R * 1.5 * dt, kl = Math.min(1, dt * 4);   // 천천히 걸어옴
-  for(let i = 0; i < S.orders.length && d < dotSlots.length; i++){
+  for(let i = 0; i < S.orders.length && d < nSlots; i++){
     const o = S.orders[i]; if(isTote(o, i)) continue; live.add(o.id);
-    const k = Math.min(dotSlots.length - d, Math.max(1, Math.round((o.n || 1) / dpp)));
+    const k = Math.min(nSlots - d, Math.max(1, Math.round((o.n || 1) / dpp)));
     let c = crowds.get(o.id);
     if(!c || c.k !== k){
       // 점 개수가 바뀌어도 기존 점 위치는 그대로 두고, 늘어난 점만 근처에 추가
@@ -1774,8 +1783,15 @@ function bigOut(){
   else if(!bigOutOn && n < OUT_MAX * 0.6) bigOutOn = true;
   return bigOutOn;
 }
+let dotFrame = 0;
 function drawDots(){
   if((!dotUsed && !leaving.length && !outflow.length) || !dotU32) return;
+  // 점 그림은 2프레임에 한 번만 새로 만들고, 사이 프레임은 지난 그림을 그대로 찍음 (초당 30번 갱신)
+  if((++dotFrame & 1) && dPrev){
+    ctx.save(); ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(dotCv, dPrev.x0, dPrev.y0, dPrev.x1 - dPrev.x0 + 1, dPrev.y1 - dPrev.y0 + 1, dPrev.x0, dPrev.y0, dPrev.x1 - dPrev.x0 + 1, dPrev.y1 - dPrev.y0 + 1);
+    ctx.restore(); return;
+  }
   const u = dotU32, w = dotW, h = dotH, lift = R * DOT_LIFT;
   // 지난 프레임에 찍은 영역만 지움 (화면 전체를 매번 지우지 않음)
   if(dPrev){ for(let yy = dPrev.y0; yy <= dPrev.y1; yy++) u.fill(0, yy * w + dPrev.x0, yy * w + dPrev.x1 + 1); }
@@ -2592,9 +2608,31 @@ cv.addEventListener('pointerdown', e => {
     trail = [{x:p.x, y:p.y, t:performance.now()}];
   } else tap = {id:e.pointerId, x:p.x, y:p.y};
 });
+// 🖱️ PC 마우스만 돌리기: 켜 두면 버튼을 안 누르고 마우스를 원으로 움직이기만 해도 레일이 돎
+let hoverSpin = (() => { try{ return localStorage.getItem('dabonaettung-hover') === '1'; }catch(e){ return false; } })();
+function setHover(v){
+  hoverSpin = v; try{ localStorage.setItem('dabonaettung-hover', v ? '1' : '0'); }catch(e){}
+  if(!v && drag && drag.id === 'hover') drag = null;
+  const b = $('hoverBtn'); if(b){ b.classList.toggle('on', v); b.title = v ? '마우스만 돌리기 켜짐 (M)' : '마우스만 돌리기 꺼짐 (M)'; }
+  hintMsg = v ? '🖱️ 마우스만 돌려도 포장해요 (M으로 끄기)' : '🖱️ 마우스만 돌리기 꺼짐'; hintT = 1.6;
+}
+cv.addEventListener('pointerleave', e => { if(drag && drag.id === 'hover') drag = null; });
 cv.addEventListener('pointermove', e => {
+  if(hoverSpin && e.pointerType === 'mouse' && !e.buttons && !(drag && drag.id !== 'hover')){
+    const p = pt(e);
+    if(!inR(p, L.pack) || S.night || isPaused()){ if(drag) drag = null; return; }
+    if(!drag){
+      const fixed = S.spin === 'ccw' ? -1 : S.spin === 'cw' ? 1 : 0;
+      drag = {id:'hover', last:Math.atan2(p.y - cy, p.x - cx), dir:fixed, fixed, acc:0, back:0};
+      trail = [{x:p.x, y:p.y, t:performance.now()}];
+      return;
+    }
+    return spinMove(p);
+  }
   if(!drag || e.pointerId !== drag.id) return;
-  const p = pt(e);
+  spinMove(pt(e));
+});
+function spinMove(p){
   trail.push({x:p.x, y:p.y, t:performance.now()});
   const dist = Math.hypot(p.x - cx, p.y - cy);
   const a = Math.atan2(p.y - cy, p.x - cx);
@@ -2610,7 +2648,7 @@ cv.addEventListener('pointermove', e => {
   const g = d * drag.dir;
   if(g > 0){ drag.back = 0; applyRotation(g, drag.dir); }
   else if(!drag.fixed){ drag.back -= g; if(drag.back > 1.2){ drag.dir = -drag.dir; drag.back = 0; } }
-});
+}
 function endPointer(e){
   if(drag && e.pointerId === drag.id) drag = null;
   if(tap && e.pointerId === tap.id){
@@ -2637,7 +2675,8 @@ function perfWatch(dt){
   perfT += dt; perfN++;
   if(perfT < 1.5) return;
   const fps = perfN / perfT; perfT = 0; perfN = 0;
-  if(fps < 50){ if(++perfSlow >= 2 && dprCap > 1){ dprCap = Math.max(1, Math.min(dprCap, window.devicePixelRatio || 1) - 0.25); perfSlow = 0; resize(); } }
+  if(fps < 50 && ++perfSlow >= 2 && dotsCap > 2000){ dotsCap = dotsCap > 3000 ? 3000 : 2000; perfSlow = 0; return; }
+  if(fps < 50){ if(perfSlow >= 2 && dprCap > 1){ dprCap = Math.max(1, Math.min(dprCap, window.devicePixelRatio || 1) - 0.25); perfSlow = 0; resize(); } }
   else perfSlow = 0;
 }
 function resize(){
@@ -2970,7 +3009,10 @@ let last = performance.now(), uiT = 0, saveT = 0, errCount = 0;
 let paused = false;
 const isPaused = () => paused || !$('menu').classList.contains('hidden') || !$('rebirth').classList.contains('hidden');
 function setPause(v){ paused = v; $('pauseOv').classList.toggle('hidden', !v); if(v){ drag = null; closeSheet(); save(); } }
-$('clockStat').onclick = () => setPause(!paused);   // 시계를 누르면 시간이 멈춤
+$('clockStat').onclick = () => setPause(!paused);
+$('hoverBtn').onclick = () => setHover(!hoverSpin);
+$('hoverBtn').classList.toggle('on', hoverSpin);
+window.addEventListener('keydown', e => { if((e.key === 'm' || e.key === 'M') && !e.repeat && !(e.target.closest && e.target.closest('input,textarea'))) setHover(!hoverSpin); });   // 시계를 누르면 시간이 멈춤
 $('pauseOv').addEventListener('pointerdown', e => { e.preventDefault(); setPause(false); });
 window.addEventListener('keydown', e => {
   if(e.target.closest && e.target.closest('input,textarea')) return;
@@ -3035,7 +3077,7 @@ function doRebirth(){
 }
 $('rebirthBtn').onclick = openRebirth;
 // 🔄 새로고침: 저장 → 저장해 둔 옛 버전 파일 지우기 → 최신 버전으로 다시 열기 (진행 상황은 그대로)
-const APP_VER = 'v110';
+const APP_VER = 'v111';
 $('verText').textContent = `다보냄 ${APP_VER}`;
 $('reloadBtn').onclick = async () => {
   $('reloadBtn').textContent = '⏳ 최신 버전 받는 중…';
