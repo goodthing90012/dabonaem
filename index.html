@@ -855,7 +855,7 @@ function complete(o, x, y, byHand, quiet){
   const a = ants.get(o.id);
   if(a){ batchDots += 1; ants.delete(o.id);
     // 순간이동 대신 차례로 포장대로 빨려 들어감 (한 번에 많이 처리돼도 줄줄이 흐르는 느낌)
-    if(!a.hidden && fx.flyers.length < 160){ fx.flyers.push({x:a.x, y:a.y, tx:x, ty:y, t:-Math.min(0.55, flyQ * 0.05), s:R * 0.3 * kIn * (o.size > 1 ? 1.4 : 1), color:o.urgent ? '#f87171' : chDef(o.ch).color}); flyQ++; } }
+    if(!a.hidden && fx.flyers.length < 220){ fx.flyers.push({x:a.x, y:a.y, tx:x, ty:y, t:-Math.min(0.9, flyQ * 0.08), s:R * 0.3 * kIn * (o.size > 1 ? 1.4 : 1), color:o.urgent ? '#f87171' : chDef(o.ch).color}); flyQ++; } }
   else {                                   // 점 무리는 포장대(중앙)로 걸어가서 사라짐
     const c = crowds.get(o.id);
     if(c){ crowds.delete(o.id); leaving.push({c, t:0, urgent:o.urgent, ch:o.ch}); batchDots += c.k; }
@@ -1060,7 +1060,7 @@ function update(dt){
   hintT = Math.max(0, hintT - dt);
   for(const k in fx.chPulse) fx.chPulse[k] = Math.max(0, fx.chPulse[k] - dt * 3);
   fx.slips.forEach(s => s.t += dt * 1.5); fx.slips = fx.slips.filter(s => s.t < 1);
-  fx.flyers.forEach(f => f.t += dt * 1.6); fx.flyers = fx.flyers.filter(f => f.t < 1);
+  fx.flyers.forEach(f => f.t += dt * 0.9);   // 약 1.1초 동안 빨려 들어감 fx.flyers = fx.flyers.filter(f => f.t < 1);
   if(!fx.flyers.length) flyQ = 0;
   updateAnts(dt);
   updateDots(dt);
@@ -3120,7 +3120,7 @@ function doRebirth(){
 }
 $('rebirthBtn').onclick = openRebirth;
 // 🔄 새로고침: 저장 → 저장해 둔 옛 버전 파일 지우기 → 최신 버전으로 다시 열기 (진행 상황은 그대로)
-const APP_VER = 'v115';
+const APP_VER = 'v116';
 $('verText').textContent = `다보냄 ${APP_VER}`;
 $('reloadBtn').onclick = async () => {
   $('reloadBtn').textContent = '⏳ 최신 버전 받는 중…';
