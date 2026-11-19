@@ -2030,7 +2030,7 @@ function toteSprite(col, s, mood, shad){
 }
 // 자리 잡은 상자 더미는 뒤쪽 캔버스(#pilecv)에 바뀔 때만 다시 그림 → 매 프레임 합성 비용 없음
 let pileSig = -1;
-let pileT = 0;
+let pileT = 0, walkCnt = 0, crowdWalk = false;   // 지난 프레임에 걷던 상자 수 → 많으면 가볍게 그림
 function drawPile(list, sig){
   const pc = $('pilecv');
   if(pc.width !== cv.width || pc.height !== cv.height){ pc.width = cv.width; pc.height = cv.height; pileSig = -2; }
@@ -2058,10 +2058,15 @@ function drawAnt(a, o, isTarget){
   }
   const walk = a.mv > 0.1 && a.l < 0.3, mood = low || o.overdue;
   const shad = a.l < 0.5;
-  if(shad && (walk || isTarget)){ ctx.fillStyle = 'rgba(15,23,42,.13)'; ctx.beginPath(); ctx.ellipse(x, y + s * 0.08, s * 0.5, s * 0.15, 0, 0, TAU); ctx.fill(); }
+  if(walk) walkCnt++;
+  if(shad && (isTarget || (walk && !crowdWalk))){ ctx.fillStyle = 'rgba(15,23,42,.13)'; ctx.beginPath(); ctx.ellipse(x, y + s * 0.08, s * 0.5, s * 0.15, 0, 0, TAU); ctx.fill(); }
   if(isTarget){ ctx.fillStyle = 'rgba(250,204,21,.55)'; ctx.beginPath(); ctx.ellipse(x, y + s * 0.06, s * 0.78, s * 0.28, 0, 0, TAU); ctx.fill(); }
   let by;
-  if(walk || isTarget){
+  if(walk && crowdWalk){              // 🌪️ 폭주 때처럼 걷는 상자가 많으면 미리 구운 그림을 통통 튀기기만 (벡터로 하나하나 그리지 않음)
+    const hop = Math.abs(Math.sin(a.ph)) * s * 0.16, sp = toteSprite(col, s, mood, true);
+    ctx.drawImage(sp.cv, x - sp.ox, y - sp.oy - hop, sp.w, sp.h);
+    by = y - s * 0.9 - hop;
+  } else if(walk || isTarget){
     const hop = walk ? Math.abs(Math.sin(a.ph)) * s * 0.16 : 0, lg = walk ? Math.sin(a.ph) * s * 0.18 : 0;
     by = paintTote(ctx, x, y, s, col, mood, lg, hop);
   } else {
@@ -2069,7 +2074,7 @@ function drawAnt(a, o, isTarget){
     ctx.drawImage(sp.cv, x - sp.ox, y - sp.oy, sp.w, sp.h);
     by = y - s * 0.9;
   }
-  if(o.br){ const ct = S.contracts.find(c => c.id === o.br); if(ct){ ctx.font = `${Math.round(s * 0.55)}px Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(BRANDS[ct.b].icon, x - s * 0.5, by - s * 0.15); } }
+  if(o.br && !(walk && crowdWalk)){ const ct = S.contracts.find(c => c.id === o.br); if(ct){ ctx.font = `${Math.round(s * 0.55)}px Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(BRANDS[ct.b].icon, x - s * 0.5, by - s * 0.15); } }
   if(isTarget && (o.n || 1) > 1){    // 1묶음 = 여러 건이면 몇 건인지 (겹치지 않게 맨 앞 하나에만)
     const t = '×' + fmtN(o.n), fs = Math.max(9, Math.round(s * 0.42));
     ctx.font = `900 ${fs}px Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -2140,6 +2145,7 @@ function ringBase(tier, RR){
   ctx.beginPath(); ctx.arc(0, 0, RR + R * 0.27, 0, TAU); ctx.stroke();
 }
 function drawPack(){
+  crowdWalk = walkCnt > 25; walkCnt = 0;
   const z = L.pack, RR = R * 1.85;
   const nOrd = S.orders.length;
   // 컨테이너 레일 링 (살짝 눌린 원 = 3/4 시점)
@@ -3150,7 +3156,7 @@ function doRebirth(){
 }
 $('rebirthBtn').onclick = openRebirth;
 // 🔄 새로고침: 저장 → 저장해 둔 옛 버전 파일 지우기 → 최신 버전으로 다시 열기 (진행 상황은 그대로)
-const APP_VER = 'v118';
+const APP_VER = 'v119';
 $('verText').textContent = `다보냄 ${APP_VER}`;
 $('reloadBtn').onclick = async () => {
   $('reloadBtn').textContent = '⏳ 최신 버전 받는 중…';
