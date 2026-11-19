@@ -853,7 +853,9 @@ function complete(o, x, y, byHand, quiet){
   const i = S.orders.indexOf(o); if(i < 0 || S.stock <= 0) return false;
   S.orders.splice(i, 1);
   const a = ants.get(o.id);
-  if(a){ batchDots += 1; ants.delete(o.id); if(!a.hidden) fx.flyers.push({x:a.x, y:a.y, tx:x, ty:y, t:0, color:o.urgent ? '#ef4444' : chDef(o.ch).color}); }
+  if(a){ batchDots += 1; ants.delete(o.id);
+    // 순간이동 대신 차례로 포장대로 빨려 들어감 (한 번에 많이 처리돼도 줄줄이 흐르는 느낌)
+    if(!a.hidden && fx.flyers.length < 160){ fx.flyers.push({x:a.x, y:a.y, tx:x, ty:y, t:-Math.min(0.55, flyQ * 0.05), s:R * 0.3 * kIn * (o.size > 1 ? 1.4 : 1), color:o.urgent ? '#f87171' : chDef(o.ch).color}); flyQ++; } }
   else {                                   // 점 무리는 포장대(중앙)로 걸어가서 사라짐
     const c = crowds.get(o.id);
     if(c){ crowds.delete(o.id); leaving.push({c, t:0, urgent:o.urgent, ch:o.ch}); batchDots += c.k; }
@@ -1058,7 +1060,8 @@ function update(dt){
   hintT = Math.max(0, hintT - dt);
   for(const k in fx.chPulse) fx.chPulse[k] = Math.max(0, fx.chPulse[k] - dt * 3);
   fx.slips.forEach(s => s.t += dt * 1.5); fx.slips = fx.slips.filter(s => s.t < 1);
-  fx.flyers.forEach(f => f.t += dt * 4); fx.flyers = fx.flyers.filter(f => f.t < 1);
+  fx.flyers.forEach(f => f.t += dt * 1.6); fx.flyers = fx.flyers.filter(f => f.t < 1);
+  if(!fx.flyers.length) flyQ = 0;
   updateAnts(dt);
   updateDots(dt);
   updateOutflow(dt);
@@ -1593,7 +1596,7 @@ function frontN(){
   const cn = curN();
   const n = S.orders.length;
   // 후반이어도 처리해서 대기 묶음이 줄어들면 다시 컨테이너로 돌아와 시점이 가까워짐
-  if(smallN && cn > 3.5 && n > 160) smallN = false; else if(!smallN && (cn < 2.5 || n < 100)) smallN = true;
+  if(smallN && cn > 3.5 && n > 160) smallN = false; else if(!smallN && (cn < 2.5 || n < 40)) smallN = true;   // 후반엔 40묶음 아래로 줄어야 컨테이너로 (전환 덜 잦게)
   if(!smallN) return 0;
   if(bigInOn && n > TOTE_MAX) bigInOn = false;
   else if(!bigInOn && n < TOTE_MAX * 0.7) bigInOn = true;
@@ -1643,6 +1646,7 @@ function buildDotSlots(){
   dotCx = dotCv.getContext('2d'); dotImg = dotCx.createImageData(dotW, dotH); dotU32 = new Uint32Array(dotImg.data.buffer); dPrev = null;
 }
 let dotCv = null, dotCx = null, dotImg = null, dotU32 = null, dotW = 0, dotH = 0;
+let flyQ = 0;          // 한 번에 처리된 컨테이너들이 차례로 날아가게 하는 순번
 const leaving = [];   // 포장돼서 중앙 포장대로 걸어가는 점 무리
 function abgr(hex, lighten){
   const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
@@ -2469,9 +2473,12 @@ function draw(){
   }
   // 포장대로 빨려 들어가는 주문
   for(const f of fx.flyers){
-    const e = f.t * f.t, s = R * 0.3 * (1 - f.t * 0.5);
-    const x = f.x + (f.tx - f.x) * e, y = f.y + (f.ty - f.y) * e - Math.sin(f.t * Math.PI) * R * 0.5;
-    block(x, y, s, s * 0.5, s * 0.3, f.color, shade(f.color, 0.45), 1);
+    const t = Math.max(0, f.t), e = t * t * t;                // 처음엔 살짝, 갈수록 빨라지며 빨려 들어감
+    const s0 = f.s || R * 0.3, s = s0 * (1 - t * 0.6);
+    const x = f.x + (f.tx - f.x) * e, y = f.y + (f.ty - f.y) * e - Math.sin(t * Math.PI) * R * 0.18 - (f.t < 0 ? 0 : Math.abs(Math.sin(t * 9)) * s0 * 0.12);
+    if(s < 11){ ctx.fillStyle = f.color; ctx.fillRect(x - s / 2, y - s * 0.8, s, s * 0.8); continue; }
+    const sp = toteSprite(f.color, s0, false, false), k = s / s0;   // 원래 크기 스프라이트를 줄여 그림 (크기마다 새로 만들지 않게)
+    ctx.drawImage(sp.cv, x - sp.ox * k, y - sp.oy * k, sp.w * k, sp.h * k);
   }
   // 출고 박스 날아가기
   for(const b of fx.boxes){
@@ -2594,7 +2601,7 @@ function turnDone(byHand){
 }
 function packBatch(byHand, frac = 1){
   let cap = perRev() * frac + batchCarry, cnt = 0, sumN = 0, sumPay = 0;
-  batchDots = 0;
+  batchDots = 0; flyQ = Math.max(0, flyQ - 3);
   while(true){
     const t = playerTarget();
     if(!t || cap < (t.size || 1)) break;
@@ -3113,7 +3120,7 @@ function doRebirth(){
 }
 $('rebirthBtn').onclick = openRebirth;
 // 🔄 새로고침: 저장 → 저장해 둔 옛 버전 파일 지우기 → 최신 버전으로 다시 열기 (진행 상황은 그대로)
-const APP_VER = 'v114';
+const APP_VER = 'v115';
 $('verText').textContent = `다보냄 ${APP_VER}`;
 $('reloadBtn').onclick = async () => {
   $('reloadBtn').textContent = '⏳ 최신 버전 받는 중…';
