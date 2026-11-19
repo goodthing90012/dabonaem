@@ -855,7 +855,7 @@ function complete(o, x, y, byHand, quiet){
   const a = ants.get(o.id);
   if(a){ batchDots += 1; ants.delete(o.id);
     // 순간이동 대신 차례로 포장대로 빨려 들어감 (한 번에 많이 처리돼도 줄줄이 흐르는 느낌)
-    if(!a.hidden && fx.flyers.length < 220){ fx.flyers.push({x:a.x, y:a.y, tx:x, ty:y, t:-Math.min(0.9, flyQ * 0.08), s:R * 0.3 * kIn * (o.size > 1 ? 1.4 : 1), color:o.urgent ? '#f87171' : chDef(o.ch).color}); flyQ++; } }
+    if(!a.hidden && fx.flyers.length < 70){ fx.flyers.push({x:a.x, y:a.y, tx:x, ty:y, t:-Math.min(0.9, flyQ * 0.08), s:R * 0.3 * kIn * (o.size > 1 ? 1.4 : 1), color:o.urgent ? '#f87171' : chDef(o.ch).color}); flyQ++; } }
   else {                                   // 점 무리는 포장대(중앙)로 걸어가서 사라짐
     const c = crowds.get(o.id);
     if(c){ crowds.delete(o.id); leaving.push({c, t:0, urgent:o.urgent, ch:o.ch}); batchDots += c.k; }
@@ -896,7 +896,8 @@ const WAVE_SEC = 12;
 const PRESS = 1.35, PRESS_MAX = 5;         // 압박 유입: 처리 속도 ×1.35, 기본 유입의 최대 5배
 let natEma = 0, procEma = 0, pressAcc = 0, pendSeen = 0, shipSeen = -1, calmT = 0;
 // 연동 채널 중 하나 (주문 많은 채널일수록 자주)
-function pickCh(list){ let tot = 0; for(const c of list) tot += chRate(c, false) || 0.01; let r = Math.random() * tot; for(const c of list){ r -= chRate(c, false) || 0.01; if(r <= 0) return c.id; } return list[0].id; }
+function chPicker(list){ const w = list.map(c => chRate(c, false) || 0.01), tot = w.reduce((a, b) => a + b, 0);
+  return () => { let r = Math.random() * tot; for(let i = 0; i < list.length; i++){ r -= w[i]; if(r <= 0) return list[i].id; } return list[0].id; }; }
 function update(dt){
   S.playTime += dt;
   while(S.st < STAGES.length && S.served >= STAGES[S.st].goal){
@@ -1007,11 +1008,11 @@ function update(dt){
   if(calmT > 0) calmT -= dt;
   else {
     // 대기 물량이 '처리 속도 10초치'보다 적을 때만 더 밀어 넣음 → 늘 화면이 차 있지만, 열심히 돌리면 쳐낼 수 있음
-    const backlog = S.orders.length + S.pour.length, target = Math.max(30, procEma * 10);
+    const backlog = S.orders.length + S.pour.length, target = Math.min(350, Math.max(30, procEma * 10));
     const want = backlog < target ? Math.min(PRESS * procEma, 0.9 * perRev() * maxRev(), natEma * PRESS_MAX) : 0;
     pressAcc += Math.max(0, want - natEma) * dt;
     const unl1 = CH.filter(c => S.ch[c.id].lv > 0);
-    while(pressAcc >= 1 && unl1.length){ pressAcc -= 1; S.pend.push({ch:pickCh(unl1), br:0}); }
+    if(pressAcc >= 1 && unl1.length){ const pick = chPicker(unl1); while(pressAcc >= 1){ pressAcc -= 1; S.pend.push({ch:pick(), br:0}); } }
   }
   if(S.pend.length){ S.pour.push(...S.pend); S.pend = []; }
   pendSeen = 0;
@@ -1020,12 +1021,12 @@ function update(dt){
   if(S.waveT <= 0){
     S.waveT = 30 + Math.random() * 10;
     const unl1 = CH.filter(c => S.ch[c.id].lv > 0);
-    const k = Math.max(12, Math.min(3000, Math.round(Math.max(natEma, Math.min(PRESS * procEma, natEma * PRESS_MAX)) * 15)));
-    for(let i = 0; i < k && unl1.length; i++) S.pour.push({ch:pickCh(unl1), br:0});
+    const k = Math.max(12, Math.min(450, Math.round(Math.max(natEma, Math.min(PRESS * procEma, natEma * PRESS_MAX)) * 15)));
+    if(unl1.length){ const pick = chPicker(unl1); for(let i = 0; i < k; i++) S.pour.push({ch:pick(), br:0}); }
     say(`🌪️ 주문 폭주! ${fmtN(k)}묶음 몰려와요`, '#dc2626', 2);
     calmT = 9;
   }
-  pourAcc += dt * Math.max(45, S.pour.length / 2.5);
+  pourAcc += dt * Math.min(150, Math.max(45, S.pour.length / 2.5));
   while(pourAcc >= 1 && S.pour.length){
     pourAcc -= 1;
     const e = S.pour.shift(), c = chDef(e.ch);
@@ -1615,7 +1616,9 @@ const crowds = new Map();          // order.id → {k, xs, ys, ls}
 const TOTE_MAX = 600, OUT_MAX = 300;   // 이 개수까지는 상자로 그리고, 넘으면 점으로 (그 즈음엔 크기가 점과 거의 같음)
 let bigInOn = true, kIn = 1, kChar = 1;   // kChar: 작업자·나·포장대 배율 (컨테이너 따라 최소 0.65)
 let smallN = true;
-function frontN(){
+let fnT = -1, fnV = 0;
+function frontN(){ if(fnT === now) return fnV; fnT = now; return fnV = frontNRaw(); }   // 한 프레임에 한 번만 계산 (컨테이너마다 부르던 것)
+function frontNRaw(){
   // 1묶음이 여러 건이 되면(후반) 컨테이너 대신 실제 건수만큼 점으로 → 산더미가 폭풍처럼 쌓여 보이게
   const cn = curN();
   const n = S.orders.length;
@@ -2009,7 +2012,8 @@ function paintTote(c, x, y, s, col, mood, lg, hop){
 // 멈춰 있는 상자는 미리 그려둔 그림을 찍어서 빠르게 (수백 개여도 가볍게)
 const toteCache = new Map();
 function toteSprite(col, s, mood, shad){
-  const sq = Math.round(s * 2) / 2, key = col + sq + (mood ? 'm' : '') + (shad ? 's' : '');
+  // 크기를 6% 단계로 묶음 → 확대·축소 중에도 매 프레임 새 스프라이트를 굽지 않음
+  const sq = Math.round(Math.pow(1.06, Math.round(Math.log(Math.max(2, s)) / Math.log(1.06))) * 2) / 2, key = col + sq + (mood ? 'm' : '') + (shad ? 's' : '');
   let sp = toteCache.get(key);
   if(!sp){
     if(toteCache.size > 400) toteCache.clear();
@@ -2026,12 +2030,14 @@ function toteSprite(col, s, mood, shad){
 }
 // 자리 잡은 상자 더미는 뒤쪽 캔버스(#pilecv)에 바뀔 때만 다시 그림 → 매 프레임 합성 비용 없음
 let pileSig = -1;
+let pileT = 0;
 function drawPile(list, sig){
   const pc = $('pilecv');
   if(pc.width !== cv.width || pc.height !== cv.height){ pc.width = cv.width; pc.height = cv.height; pileSig = -2; }
   if(!list.length){ if(pileSig !== -1){ pc.getContext('2d').clearRect(0, 0, pc.width, pc.height); pileSig = -1; } return; }
-  if(sig !== pileSig){
-    pileSig = sig;
+  // 주문이 계속 드나들어 매 프레임 바뀌므로, 다시 그리는 건 0.12초에 한 번까지만 (가장 무거운 부분)
+  if(sig !== pileSig && (pileSig < 0 || now - pileT > 120)){
+    pileSig = sig; pileT = now;
     const g = pc.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, pc.width, pc.height); g.setTransform(dpr, 0, 0, dpr, 0, 0);
     list.sort((p, q) => (p[0].y + p[0].l * 0.01) - (q[0].y + q[0].l * 0.01));
     const saved = ctx; ctx = g;
@@ -3144,7 +3150,7 @@ function doRebirth(){
 }
 $('rebirthBtn').onclick = openRebirth;
 // 🔄 새로고침: 저장 → 저장해 둔 옛 버전 파일 지우기 → 최신 버전으로 다시 열기 (진행 상황은 그대로)
-const APP_VER = 'v117';
+const APP_VER = 'v118';
 $('verText').textContent = `다보냄 ${APP_VER}`;
 $('reloadBtn').onclick = async () => {
   $('reloadBtn').textContent = '⏳ 최신 버전 받는 중…';
