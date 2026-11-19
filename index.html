@@ -893,6 +893,10 @@ function workerPos(i){
 let autoTimer = 0, pourAcc = 0, lateAcc = 0, lateTimer = 0;
 const OVERDUE_SEC = 240;   // 지연 후 고객 취소까지
 const WAVE_SEC = 12;
+const PRESS = 1.35, PRESS_MAX = 5;         // 압박 유입: 처리 속도 ×1.35, 기본 유입의 최대 5배
+let natEma = 0, procEma = 0, pressAcc = 0, pendSeen = 0, shipSeen = -1, calmT = 0;
+// 연동 채널 중 하나 (주문 많은 채널일수록 자주)
+function pickCh(list){ let tot = 0; for(const c of list) tot += chRate(c, false) || 0.01; let r = Math.random() * tot; for(const c of list){ r -= chRate(c, false) || 0.01; if(r <= 0) return c.id; } return list[0].id; }
 function update(dt){
   S.playTime += dt;
   while(S.st < STAGES.length && S.served >= STAGES[S.st].goal){
@@ -995,13 +999,33 @@ function update(dt){
   // 자동 회전 모터 방향 = 회전 설정 방향
   const idleDir = S.spin === 'cw' ? 1 : -1;
   if(S.autoRotLv && !drag && omega < maxRev() * TAU * autoRotPct()) packRotate(maxRev() * TAU * autoRotPct() * dt, idleDir, false);   // 자동 회전 모터 (손 놓으면 레일은 멈춤)
-  // 📥 주문 수집: 주기마다 쌓인 주문을 한꺼번에 쏟아냄
+  // 📥 주문은 계속 들어옴 + 🔥 압박: 내가 처리하는 속도의 1.35배를 따라 밀려옴 (손 최대 속도의 90%, 기본 유입의 5배까지)
+  natEma += (CH.reduce((a, c) => a + chRate(c), 0) + repeatRate() * ratingMult() - natEma) * Math.min(1, dt / 8);   // 기본 유입 속도
+  if(shipSeen < 0 || S.shipped < shipSeen) shipSeen = S.shipped;   // 처음·새 판에선 기준만 맞춤
+  procEma += ((S.shipped - shipSeen) / Math.max(dt, 1e-3) - procEma) * Math.min(1, dt / 5);
+  shipSeen = S.shipped;
+  if(calmT > 0) calmT -= dt;
+  else {
+    // 대기 물량이 '처리 속도 10초치'보다 적을 때만 더 밀어 넣음 → 늘 화면이 차 있지만, 열심히 돌리면 쳐낼 수 있음
+    const backlog = S.orders.length + S.pour.length, target = Math.max(30, procEma * 10);
+    const want = backlog < target ? Math.min(PRESS * procEma, 0.9 * perRev() * maxRev(), natEma * PRESS_MAX) : 0;
+    pressAcc += Math.max(0, want - natEma) * dt;
+    const unl1 = CH.filter(c => S.ch[c.id].lv > 0);
+    while(pressAcc >= 1 && unl1.length){ pressAcc -= 1; S.pend.push({ch:pickCh(unl1), br:0}); }
+  }
+  if(S.pend.length){ S.pour.push(...S.pend); S.pend = []; }
+  pendSeen = 0;
+  // 🌪️ 주문 폭주: 30~40초마다 평소 15초치가 한꺼번에 몰려옴, 직후 6초는 압박 쉬어감
   S.waveT -= dt;
   if(S.waveT <= 0){
-    S.waveT = WAVE_SEC;
-    if(S.pend.length){ say(`📥 주문 수집! ${S.pend.length}건 쏟아짐`, '#2563eb', 1.6); S.pour.push(...S.pend); S.pend = []; }
+    S.waveT = 30 + Math.random() * 10;
+    const unl1 = CH.filter(c => S.ch[c.id].lv > 0);
+    const k = Math.max(12, Math.min(3000, Math.round(Math.max(natEma, Math.min(PRESS * procEma, natEma * PRESS_MAX)) * 15)));
+    for(let i = 0; i < k && unl1.length; i++) S.pour.push({ch:pickCh(unl1), br:0});
+    say(`🌪️ 주문 폭주! ${fmtN(k)}묶음 몰려와요`, '#dc2626', 2);
+    calmT = 9;
   }
-  pourAcc += dt * 45;
+  pourAcc += dt * Math.max(45, S.pour.length / 2.5);
   while(pourAcc >= 1 && S.pour.length){
     pourAcc -= 1;
     const e = S.pour.shift(), c = chDef(e.ch);
@@ -1472,11 +1496,11 @@ function drawChannelsRaw(){
     rr(bx, by, w, 18, 9); ctx.fillStyle = '#0f766e'; ctx.fill();
     ctx.fillStyle = '#fff'; ctx.fillText(t, bx + w / 2, by + 9.5);
   }
-  if(landscape) label(z, `🛒 수집 ${Math.ceil(S.waveT)}s`, sheetBadge('channel'));
+  if(landscape) label(z, `🌪️ 폭주 ${Math.ceil(S.waveT)}s`, sheetBadge('channel'));
   else {
     ctx.fillStyle = '#0f766e'; ctx.font = '800 12px Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.fillText('🛒 주문', z.x + 8, z.y + z.h / 2 - 7);
-    ctx.font = '700 10px Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif'; ctx.fillStyle = '#2563eb'; ctx.fillText(`수집 ${Math.ceil(S.waveT)}s`, z.x + 8, z.y + z.h / 2 + 9);
+    ctx.font = '700 10px Pretendard Variable, Pretendard, Apple SD Gothic Neo, sans-serif'; ctx.fillStyle = '#2563eb'; ctx.fillText(`🌪️ ${Math.ceil(S.waveT)}s`, z.x + 8, z.y + z.h / 2 + 9);
     z.lab = {x:z.x, y:z.y, w:56, h:z.h};
     if(sheetBadge('channel')){ ctx.beginPath(); ctx.arc(z.x + 54, z.y + z.h / 2 - 9, 6, 0, TAU); ctx.fillStyle = '#ef4444'; ctx.fill(); }
   }
@@ -3120,7 +3144,7 @@ function doRebirth(){
 }
 $('rebirthBtn').onclick = openRebirth;
 // 🔄 새로고침: 저장 → 저장해 둔 옛 버전 파일 지우기 → 최신 버전으로 다시 열기 (진행 상황은 그대로)
-const APP_VER = 'v116';
+const APP_VER = 'v117';
 $('verText').textContent = `다보냄 ${APP_VER}`;
 $('reloadBtn').onclick = async () => {
   $('reloadBtn').textContent = '⏳ 최신 버전 받는 중…';
